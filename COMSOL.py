@@ -4,10 +4,18 @@ import numpy as np
 
 
 
-def comsol_model_unitcell(h, l, theta, e, young_mod, poisson_ratio, density,
-                           extrude, fillet, metric,geom_path,file_path):
+def comsol_model_unitcell(H, V, h, l, theta, e, young_mod, poisson_ratio, density,
+                           extrude, fillet, metric,geom_path,file_path,array=False):
 
     theta = np.radians(theta)
+    dx = l * np.cos(theta) #distancia horizontal
+    dy = l * np.sin(theta) #distancia vertical
+    alpha = np.pi/2 - theta
+    #calcula o espaço entre as células
+    de = e * np.tan(theta)/2 + e / np.sin(alpha) #espaço vertical entre as fileiras de celulas
+    dz = 2*h - 2*dy  #espaço vertical de uma célula para outra
+    dV = dz + 2*de 
+    dH = 2*dx + e 
     
     # Inicia o cliente (usa o binário em /usr/local/bin/comsol automaticamente)
     client = mph.start()
@@ -110,15 +118,22 @@ def comsol_model_unitcell(h, l, theta, e, young_mod, poisson_ratio, density,
     wp.run("fil1")
 
 
-    # ARRAY 2D
-    geom.create("arr1", "Array")
-    geom.feature("arr1").selection("input").set("obj1")
+    # --------------------------------------------------
+    # Array 2D
+    # --------------------------------------------------
+    if array:
+        wp.create("arr1", "Array")
+        wp.feature("arr1").selection("input").set("fil1") 
+        wp.feature("arr1").set("displ", [str(dH),str(dV)])
+        wp.feature("arr1").set("fullsize",[str(H),str(V)])
 
-    geom.feature("arr1").set("size", ["5", "3"])
-    geom.feature("arr1").set("displ", ["4", "4"])
+        wp.run("arr1")
 
-    geom.create("uni1", "Union")
-    geom.feature("uni1").selection("input").set("arr1")
+        wp.create("uni_arr", "Union")
+        wp.feature("uni_arr").selection("input").set("arr1")
+        wp.feature("uni_arr").set("intbnd", False)
+
+        wp.run("uni_arr")
     # --------------------------------------------------
     # Extrude do working plane
     # --------------------------------------------------
@@ -126,7 +141,10 @@ def comsol_model_unitcell(h, l, theta, e, young_mod, poisson_ratio, density,
     geom.feature("ext1").set("workplane", "wp1")
 
     # Seleciona apenas o espaço nao vazio
-    geom.feature("ext1").selection("input").set(["wp1.dif1"])
+    if np.array:
+        geom.feature("ext1").selection("input").set("wp1.uni_arr")
+    else:
+        geom.feature("ext1").selection("input").set("wp1.dif1")
 
     geom.feature("ext1").set("distance", str(extrude))
 

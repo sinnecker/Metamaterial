@@ -37,6 +37,8 @@ def main():
     # 2. rodar COMSOL
     # ---------------------------
     model = comsol_model_unitcell(
+        H=GEOMETRY["H"],
+        V=GEOMETRY["V"],
         h=h,
         l=l,
         theta=theta,
@@ -48,7 +50,8 @@ def main():
         fillet=SIMULATION["fillet"],
         metric=unit,
         geom_path=PATHS["dxf"],
-        file_path=PATHS["mph"]
+        file_path=PATHS["mph"],
+        array=True
     )
 
     print("Modelo salvo em:", PATHS["mph"])

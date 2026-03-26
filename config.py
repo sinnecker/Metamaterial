@@ -2,9 +2,11 @@
 # GEOMETRIA (forma da célula)
 # ================================
 GEOMETRY = {
-    "h": 2.0,
-    "l": 1.2,
-    "theta": 30,   # graus
+    "H":4,
+    "V":3,
+    "h": 3.0,
+    "l": 1.5,
+    "theta": 40,   # graus
     "e": 0.4
 }
 
@@ -29,8 +31,8 @@ MATERIAL = {
 # COMSOL / SIMULAÇÃO
 # ================================
 SIMULATION = {
-    "extrude": 0.4,
-    "fillet": 0.1,
+    "extrude": 0.1,
+    "fillet": 0.2,
     "force": 300
 }
 
