@@ -8,7 +8,7 @@ Este projeto gera a geometria de uma célula unitária auxética, exporta em for
 
 Instale as bibliotecas Python necessárias:
 
-pip install shapely mph
+`pip install shapely mph`
 
 - Shapely → manipulação geométrica e operações booleanas  
 - mph → interface Python para o COMSOL  
