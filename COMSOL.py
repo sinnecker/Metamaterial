@@ -109,6 +109,16 @@ def comsol_model_unitcell(h, l, theta, e, young_mod, poisson_ratio, density,
 
     wp.run("fil1")
 
+
+    # ARRAY 2D
+    geom.create("arr1", "Array")
+    geom.feature("arr1").selection("input").set("obj1")
+
+    geom.feature("arr1").set("size", ["5", "3"])
+    geom.feature("arr1").set("displ", ["4", "4"])
+
+    geom.create("uni1", "Union")
+    geom.feature("uni1").selection("input").set("arr1")
     # --------------------------------------------------
     # Extrude do working plane
     # --------------------------------------------------
