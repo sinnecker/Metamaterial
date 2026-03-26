@@ -130,13 +130,13 @@ def grid_gen(H, V, e, h, l, theta):
     
         xmin = min(all_polygons1[0])[0]
         xmax = max(all_polygons1[-1])[0]
-        ymin = min(all_polygons1[0])[1]-de
-        ymax = max(all_polygons1[-1])[1]+de
+        ymin = min(all_polygons3[0])[1]+h/2
+        ymax = max(all_polygons3[-1])[1]-h/2
 
-        bbox = [(xmin-e,ymin-e),
-                (xmin-e,ymax+e),
-                (xmax+e,ymax+e),
-                (xmax+e,ymin-e)]
+        bbox = [(xmin-e,ymin),
+                (xmin-e,ymax),
+                (xmax+e,ymax),
+                (xmax+e,ymin)]
         
     return all_polygons1, all_polygons2, all_polygons3,bbox
 
