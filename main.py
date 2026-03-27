@@ -24,8 +24,6 @@ def main():
     # 1. gerar geometria
     # ---------------------------
     generate_dxf(
-        H=1,
-        V=1,
         h=h,
         l=l,
         theta=theta,

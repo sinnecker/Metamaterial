@@ -141,7 +141,7 @@ def comsol_model_unitcell(H, V, h, l, theta, e, young_mod, poisson_ratio, densit
     geom.feature("ext1").set("workplane", "wp1")
 
     # Seleciona apenas o espaço nao vazio
-    if np.array:
+    if array:
         geom.feature("ext1").selection("input").set("wp1.uni_arr")
     else:
         geom.feature("ext1").selection("input").set("wp1.dif1")
