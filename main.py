@@ -35,12 +35,12 @@ def plot_stress_strain(data_path, save_dir):
     print(f"Gráfico exportado com sucesso para {plot_path}")
 
 
-def plot_monotonic_curve(data_path, save_dir, A0, Lx, fracture_stress, geom_unit="um"):
+def plot_monotonic_curve(data_path, save_dir, A0, Lx, Ly, geom_unit="um"):
     """
     Gera a curva de compressão monotônica nominal (stress vs strain).
 
     Lê a tabela exportada pelo COMSOL com colunas:
-        para_disp | F_rx | u_x | sigma_max
+        para_disp | F_rx | u_x | sigma_max | v_top | v_bot | Vol
 
     Calcula:
         strain_nominal = u_x / Lx_m
@@ -53,37 +53,96 @@ def plot_monotonic_curve(data_path, save_dir, A0, Lx, fracture_stress, geom_unit
     # Lê os dados — o COMSOL exporta com cabeçalho comentado com '%'
     data = np.loadtxt(data_path, comments='%')
 
-    # Colunas: [para_disp_value, F_rx, u_x, sigma_max]
-    # (a primeira coluna é o índice paramétrico; o mapeamento depende do COMSOL)
-    # Assumindo exportação colunar: col0=param_val, col1=F_rx, col2=u_x, col3=sigma_max
     if data.ndim == 1:
         data = data.reshape(1, -1)
 
-    u_x       = data[:, 0]          # deslocamento prescrito (unidade da geometria)
-    F_rx      = data[:, 1]          # força de reação em X (N, sinal negativo = compressão)
-    sigma_max = data[:, 2]          # von Mises máxima por passo (Pa)
+    # O COMSOL exportou:
+    # Col 0: Parâmetro da varredura (para_disp)
+    # Col 1: F_rx
+    # Col 2: u_x
+    # Col 3: sigma_max
+    # Col 4: v_top
+    # Col 5: v_bot
+    # Col 6: Vol
+    para_disp = data[:, 0]
+    F_rx      = data[:, 1]          # força de reação em X (N)
+    u_x       = data[:, 2]          # deslocamento prescrito X (m)
+    sigma_max = data[:, 3]          # von Mises máxima por passo (Pa)
+    v_top     = data[:, 4]          # descolamento no Y_max (m)
+    v_bot     = data[:, 5]          # deslocamento no Y_min (m)
+    V_sol     = data[:, 6]          # Volume do sólido exato (m³)
 
     # ------------------------------------------------------------------
     # Conversão de dimensões para o SI (metros) para o cálculo
-    # (Pois F_rx vem em N, u_x em m, e precisamos de área em m² e compr em m)
     # ------------------------------------------------------------------
     if geom_unit == "um":
         Lx_m = Lx * 1e-6
+        Ly_m = Ly * 1e-6
         A0_m2 = A0 * 1e-12
     elif geom_unit == "mm":
         Lx_m = Lx * 1e-3
+        Ly_m = Ly * 1e-3
         A0_m2 = A0 * 1e-6
     else:
         Lx_m = Lx
+        Ly_m = Ly
         A0_m2 = A0
 
+    V_box_m3 = Lx_m * A0_m2  # Lz = A0/Ly -> Volume Bounding Box = Lx * Ly * Lz = Lx * A0
+
     # Stress e strain nominais calculados coerentemente
-    strain = np.abs(u_x) / Lx_m         # adimensional (fração)
+    strain = np.abs(u_x) / Lx_m         # adimensional (fração > 0)
     stress = np.abs(F_rx) / A0_m2       # Pa (stress nominal de compressão)
 
-    # Ponto de falha: primeiro passo onde sigma_max ≥ fracture_stress
-    fail_mask = sigma_max >= fracture_stress
-    fail_idx  = np.argmax(fail_mask) if fail_mask.any() else None
+    # ------------------------------------------------------------------
+    # CÁLCULOS MACROSCÓPICOS (PROPRIEDADES EFETIVAS)
+    # ------------------------------------------------------------------
+    # 1. Porosidade
+    porosity = 1.0 - (V_sol[0] / V_box_m3)
+
+    # 2. Coeficiente de Poisson Erfetivo
+    # Axial strain real (negativo em compressão):
+    e_x = - strain 
+    # Transversal strain real (positiva se estica em Y, expansão lateral):
+    delta_Ly = v_top - v_bot
+    e_y = delta_Ly / Ly_m
+    
+    with np.errstate(divide='ignore', invalid='ignore'):
+        nu_array = -e_y / e_x
+    
+    # Pegamos o valor correspondente ao final ou inicio da zona elástica dependendo da estabilidade.
+    # O COMSOL exporta o passo 0 como 0/0=nan. Vamos pegar o índice 2 (primeiro passo confiável estabilizado)
+    idx_nu = 2 if len(nu_array) > 2 else 1 if len(nu_array) > 1 else 0
+    nu_eq = nu_array[idx_nu]
+
+    # 3. Módulo de Young Efetivo
+    # Feito pela regressão na zona puramente elástica inicial (se for muito pequeno strain < 0.05)
+    # ou pegando simplesmente os primeiros passos se o max_strain for muito pequeno
+    mask_linear = (strain > 0) & (strain < 0.05) if np.max(strain) >= 0.05 else (strain > 0)
+    
+    if np.sum(mask_linear) >= 2:
+        E_eq, _ = np.polyfit(strain[mask_linear], stress[mask_linear], 1)
+    else:
+        E_eq = stress[1] / strain[1] if len(stress) > 1 else 0.0
+
+    # 4. Stress Levels
+    yield_stress = np.max(stress)
+
+    # ------------------------------------------------------------------
+    # OUTPUT NO TERMINAL
+    # ------------------------------------------------------------------
+    print("\n" + "="*50)
+    print("      PROPRIEDADES MACROSCÓPICAS DA CÉLULA")
+    print("="*50)
+    print(f" Porosidade Física (Vazio) : {porosity*100:.2f} %")
+    print(f" Módulo de Young Efetivo   : {E_eq / 1e6:.2f} MPa")
+    print(f" Coef. de Poisson Efetivo  : {nu_eq:.3f} (em {strain[idx_nu]*100:.2f}% deformação)")
+    print(f" Máx Tensão Atingida       : {yield_stress / 1e6:.2f} MPa")
+    print("="*50 + "\n")
+
+    # Ponto de falha: maior valor de estresse
+    fail_idx  = np.argmax(sigma_max) 
+    fracture_stress = sigma_max[fail_idx]
 
     # ------------------------------------------------------------------
     # Figura
@@ -131,7 +190,40 @@ def plot_monotonic_curve(data_path, save_dir, A0, Lx, fracture_stress, geom_unit
     plt.savefig(plot_path, dpi=300, bbox_inches='tight')
     plt.close()
 
-    print(f"Curva monotônica exportada para {plot_path}")
+    print(f"Curva monotônica (Stress x Strain) exportada para {plot_path}")
+
+    # ------------------------------------------------------------------
+    # FIGURA 2: Força vs Deslocamento
+    # ------------------------------------------------------------------
+    plt.figure(figsize=(7, 5))
+    
+    # Converter deslocamento (m) para micrômetros (um) para o plot ficar legível
+    disp_um = np.abs(u_x) * 1e6
+    force_N = np.abs(F_rx)
+
+    plt.plot(disp_um, force_N, 'D-', color='#2A9D8F', linewidth=2, markersize=5, label='Força de Reação')
+    
+    # Marcação de falha nesse gráfico
+    if fail_idx is not None:
+        plt.axvline(disp_um[fail_idx], color='crimson', linestyle='--', linewidth=1.5,
+                    label=f'Falha ($\delta$ = {disp_um[fail_idx]:.2f} $\mu$m)')
+        plt.scatter([disp_um[fail_idx]], [force_N[fail_idx]], color='crimson', s=80, zorder=5)
+
+    plt.xlabel(r"Deslocamento Prescrito $\delta$ [$\mu$m]", fontsize=11)
+    plt.ylabel("Força de Reação Global F_rx [N]", fontsize=11)
+    plt.title("Força vs Deslocamento", fontsize=12, fontweight='bold')
+    plt.grid(True, linestyle=':', alpha=0.6)
+    plt.legend()
+    
+    plot_fd_path = os.path.join(save_dir, "monotonic_force_displacement.png")
+    plt.savefig(plot_fd_path, dpi=300, bbox_inches='tight')
+    plt.close()
+
+    print(f"Curva Força vs Deslocamento exportada para {plot_fd_path}")
+
+    # ------------------------------------------------------------------
+    # RELATÓRIO FINAL
+    # ------------------------------------------------------------------
     if fail_idx is not None:
         print(f"  → Falha detectada no passo {fail_idx+1}: "
               f"ε = {strain[fail_idx]*100:.1f}%, σ_max = {sigma_max[fail_idx]/1e9:.3f} GPa")
@@ -190,14 +282,14 @@ def main():
         print(f"[Experimento] Compressão Monotônica — strain máx.: {EXPERIMENT['max_strain']:.0%}, "
               f"{EXPERIMENT['n_steps']} passos")
 
-        model, data_path, A0, Lx = apply_physics_monotonic(
+        model, data_path, A0, Lx, Ly = apply_physics_monotonic(
             model           = model,
             young_mod       = MATERIAL["E"],
             poisson_ratio   = MATERIAL["nu"],
             density         = MATERIAL["rho"],
             max_strain      = EXPERIMENT["max_strain"],
+            min_strain      = EXPERIMENT["min_strain"],
             n_steps         = EXPERIMENT["n_steps"],
-            fracture_stress = EXPERIMENT["fracture_stress"],
             force           = EXPERIMENT["force"],
             NonLinear       = EXPERIMENT["NonLinear"],
             file_path       = PATHS["mph"],
@@ -214,7 +306,7 @@ def main():
                 save_dir        = "outputs/plots",
                 A0              = A0,
                 Lx              = Lx,
-                fracture_stress = EXPERIMENT["fracture_stress"],
+                Ly              = Ly,
                 geom_unit       = unit
             )
 

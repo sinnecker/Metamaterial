@@ -294,7 +294,7 @@ def apply_physics_compression(model, young_mod, poisson_ratio, density, force, f
 
 
 def apply_physics_monotonic(model, young_mod, poisson_ratio, density,
-                            max_strain, n_steps, force, NonLinear, fracture_stress, file_path):
+                            max_strain, min_strain, n_steps, force, NonLinear, file_path):
     """
     Simulação de compressão monotônica em X com varredura paramétrica de deslocamento.
 
@@ -320,7 +320,7 @@ def apply_physics_monotonic(model, young_mod, poisson_ratio, density,
         file_path     : caminho de saída do arquivo .mph
 
     Returns:
-        model, caminho do arquivo de dados globais, A0 (m²), Lx (µm)
+        model, caminho do arquivo de dados globais, A0 (m²), Lx (µm), Ly (µm)
     """
 
     # ------------------------------------------------------------------
@@ -338,7 +338,8 @@ def apply_physics_monotonic(model, young_mod, poisson_ratio, density,
 
     # Deslocamento máximo a aplicar (mesma unidade que a geometria)
     delta_max = max_strain * Lx
-    step_size = delta_max / n_steps
+    delta_start = min_strain * Lx
+    step_size = (delta_max - delta_start) / n_steps
 
     epsilon = 1e-5 * Lx
 
@@ -362,9 +363,31 @@ def apply_physics_monotonic(model, young_mod, poisson_ratio, density,
     sel_right.geom("geom1", 2)
     sel_right.set("xmin", xmax - epsilon)
     sel_right.set("xmax", xmax + epsilon)
-    sel_right.set("ymin", ymin);  sel_right.set("ymax", ymax)
-    sel_right.set("zmin", zmin);  sel_right.set("zmax", zmax)
+    sel_right.set("ymin", ymin)
+    sel_right.set("ymax", ymax)
+    sel_right.set("zmin", zmin)
+    sel_right.set("zmax", zmax)
     sel_right.set("condition", "allvertices")
+
+    sel_top = model.java.component("comp1").selection().create("topWall", "Box")
+    sel_top.geom("geom1", 2)
+    sel_top.set("xmin", xmin)
+    sel_top.set("xmax", xmax)
+    sel_top.set("ymin", ymax - epsilon)
+    sel_top.set("ymax", ymax + epsilon)
+    sel_top.set("zmin", zmin)
+    sel_top.set("zmax", zmax)
+    sel_top.set("condition", "allvertices")
+
+    sel_bot = model.java.component("comp1").selection().create("botWall", "Box")
+    sel_bot.geom("geom1", 2)
+    sel_bot.set("xmin", xmin)
+    sel_bot.set("xmax", xmax)
+    sel_bot.set("ymin", ymin - epsilon)
+    sel_bot.set("ymax", ymin + epsilon)
+    sel_bot.set("zmin", zmin)
+    sel_bot.set("zmax", zmax)
+    sel_bot.set("condition", "allvertices")
 
     # ------------------------------------------------------------------
     # Física: Mecânica dos Sólidos
@@ -409,6 +432,18 @@ def apply_physics_monotonic(model, young_mod, poisson_ratio, density,
     maxop.selection().geom("geom1", 3)
     maxop.selection().all()
 
+    aveop_top = model.java.component("comp1").cpl().create("aveop_top", "Average")
+    aveop_top.selection().geom("geom1", 2)
+    aveop_top.selection().named("topWall")
+
+    aveop_bot = model.java.component("comp1").cpl().create("aveop_bot", "Average")
+    aveop_bot.selection().geom("geom1", 2)
+    aveop_bot.selection().named("botWall")
+
+    intop_vol = model.java.component("comp1").cpl().create("intop_vol", "Integration")
+    intop_vol.selection().geom("geom1", 3)
+    intop_vol.selection().all()
+
     # ------------------------------------------------------------------
     # Estudo: Estacionário + Varredura Paramétrica em para_disp
     # ------------------------------------------------------------------
@@ -419,7 +454,7 @@ def apply_physics_monotonic(model, young_mod, poisson_ratio, density,
     param_step = study.create("param", "Parametric")
     param_step.set("sweeptype", "sparse")
     param_step.setIndex("pname",    "para_disp", 0)
-    param_step.setIndex("plistarr", f"range(0,{step_size},{delta_max})[um]", 0)
+    param_step.setIndex("plistarr", f"range({delta_start},{step_size},{delta_max})[um]", 0)
     param_step.setIndex("punit",    "um", 0)
 
     # ------------------------------------------------------------------
@@ -450,9 +485,12 @@ def apply_physics_monotonic(model, young_mod, poisson_ratio, density,
         "intop1(solid.sx)",     # Integração do stress normal na parede fixa dá a força de reação em X
         "para_disp",            # Deslocamento prescrito
         "maxop1(solid.mises)",  # Tensão de von Mises máxima no volume
+        "aveop_top(v)",         # Deslocamento Y médio no teto
+        "aveop_bot(v)",         # Deslocamento Y médio no piso
+        "intop_vol(1)",         # Volume sólido exato (m³)
     ])
-    gev.set("unit", ["N", "m", "Pa"]) # Força a extração em unidades do SI
-    gev.set("descr", ["F_rx [N]", "u_x [m]", "sigma_max [Pa]"])
+    gev.set("unit", ["N", "m", "Pa", "m", "m", "m^3"]) # Força a extração em unidades do SI
+    gev.set("descr", ["F_rx [N]", "u_x [m]", "sigma_max [Pa]", "v_top [m]", "v_bot [m]", "Vol [m^3]"])
     gev.set("table", "tbl1")
     gev.setResult()
 
@@ -507,4 +545,4 @@ def apply_physics_monotonic(model, young_mod, poisson_ratio, density,
     print(f"Modelo salvo em: {file_path}")
     print(f"Dados globais exportados em: {global_data_path}")
 
-    return model, global_data_path, A0, Lx
+    return model, global_data_path, A0, Lx, Ly
