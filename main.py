@@ -11,9 +11,6 @@ def plot_stress_strain(data_path, save_dir):
     # Lendo o arquivo numérico do COMSOL (descartando os cabeçalhos literais com '%')
     data = np.loadtxt(data_path, comments='%')
     
-    # O COMSOL exporta as coordenadas de referência [X, Y, Z] por padrão nas colunas 0, 1 e 2.
-    # Nossas expressões ["x", "y", "z", "solid.mises", "solid.disp", "solid.edeve"] começam no índice 3.
-    # Portanto a estrutura é: [X, Y, Z, x, y, z, solid.mises, solid.disp, solid.edeve]
     stress = data[:, 6]
     strain = data[:, 8]
     
