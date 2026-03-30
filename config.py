@@ -2,8 +2,8 @@
 # GEOMETRIA (forma da célula)
 # ================================
 GEOMETRY = {
-    "H":3,
-    "V":2,
+    "H":1,
+    "V":1,
     "h": 3,
     "l": 2.5,
     "theta": 20,   # graus
@@ -31,9 +31,24 @@ MATERIAL = {
 # COMSOL / SIMULAÇÃO
 # ================================
 SIMULATION = {
-    "extrude": 0.1,
+    "extrude": 1,
     "fillet": 0.2,
-    "force": 300
+    "force": ["300", "0", "0"]
+}
+
+# ================================
+# EXPERIMENTO
+# ================================
+EXPERIMENT = {
+    "type": "monotonic",      # "monotonic" ou "cyclic"
+    "force": 1, #compresion ou expassion
+    # --- Compressão Monotônica ---
+    "max_strain":      0.10,  # deformação máxima em X (fração, ex: 0.30 = 30%)
+    "n_steps":         20,    # número de passos da varredura paramétrica
+    "NonLinear": False,
+    # --- Critério de falha (linear-elástico) ---
+    # Tensão de fratura do Silicon em microestruturas ≈ 1–3 GPa
+    "fracture_stress": 1e9,   # [Pa]  limiar de von Mises para marcação de falha
 }
 
 # ================================
