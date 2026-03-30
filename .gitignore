@@ -1,0 +1,16 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.ipynb_checkpoints/
+
+# macOS
+.DS_Store
+
+# Outputs gerados (não versionar binários pesados)
+outputs/dxf/
+outputs/mph/
+outputs/plots/
+
+# Jupyter
+*.ipynb
