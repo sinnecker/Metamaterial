@@ -2,12 +2,12 @@
 # GEOMETRIA (forma da célula)
 # ================================
 GEOMETRY = {
-    "H":4,
+    "H":3,
     "V":2,
-    "h": 3.0,
-    "l": 1.5,
-    "theta": 40,   # graus
-    "e": 0.4
+    "h": 3,
+    "l": 2.5,
+    "theta": 20,   # graus
+    "e": 1
 }
 
 # ================================
@@ -22,9 +22,9 @@ SCALE = {
 # MATERIAL
 # ================================
 MATERIAL = {
-    "E": 200e9,     # Young (Pa)
-    "nu": 0.3,      # Poisson
-    "rho": 7800     # densidade
+    "E": 1.124e12,     # Young (Pa)
+    "nu": 0.28,      # Poisson
+    "rho": 2329     # densidade
 }
 
 # ================================

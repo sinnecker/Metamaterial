@@ -4,8 +4,7 @@ import numpy as np
 
 
 
-def comsol_model_unitcell(H, V, h, l, theta, e, young_mod, poisson_ratio, density,
-                           extrude, fillet, metric,geom_path,file_path,array=False):
+def build_geometry(H, V, h, l, theta, e, extrude, fillet, metric, geom_path, array=False):
 
     theta = np.radians(theta)
     dx = l * np.cos(theta) #distancia horizontal
@@ -153,6 +152,10 @@ def comsol_model_unitcell(H, V, h, l, theta, e, young_mod, poisson_ratio, densit
 
     geom.run()
 
+    model.java.component("comp1").geom("geom1").lengthUnit(metric)
+    return model
+
+def apply_physics_compression(model, young_mod, poisson_ratio, density, file_path):
     
     # --------------------------------------------------
     # Selecionando as faces para condiçoes de contorno
@@ -195,8 +198,6 @@ def comsol_model_unitcell(H, V, h, l, theta, e, young_mod, poisson_ratio, densit
 
     sel_right.set("condition", "allvertices")
 
-    model.java.component("comp1").geom("geom1").lengthUnit(metric)
-
     # --------------------------------------------------
     # FISICA
     # --------------------------------------------------
@@ -230,12 +231,63 @@ def comsol_model_unitcell(H, V, h, l, theta, e, young_mod, poisson_ratio, densit
     model.java.sol('sol1').feature('st1').set('study', 'std1')
     model.java.sol('sol1').create('v1', 'Variables')
     model.java.sol('sol1').create('s1', 'Stationary')
-    #model.java.sol('sol1').runAll()
+    
+    # Roda a simulação de fato
+    model.java.sol('sol1').runAll()
     model.build()
 
     # --------------------------------------------------
     # SALVAR MODELO
     # --------------------------------------------------
     model.save(file_path)
+    
+    # --------------------------------------------------
+    # GERAR PLOTS (IMAGEM) E EXPORTAR DADOS (TEXTO)
+    # --------------------------------------------------
+    
+    base_dir = os.path.dirname(os.path.abspath(file_path))
+    plots_dir = os.path.join(os.path.dirname(base_dir), "plots")
+    os.makedirs(plots_dir, exist_ok=True)
+    
+    # 1. Plot de Tensão (von Mises)
+    model.java.result().create("pg1", "PlotGroup3D")
+    model.java.result("pg1").create("surf1", "Surface")
+    model.java.result("pg1").feature("surf1").set("expr", "solid.mises")
+    
+    img1_path = os.path.join(plots_dir, "comsol_stress.png")
+    img1 = model.java.result().export().create("img1", "Image")
+    img1.set("plotgroup", "pg1")
+    img1.set("filename", img1_path)
+    img1.set("size", "manualprint")
+    img1.set("unit", "mm")
+    img1.set("height", "150")
+    img1.set("width", "200")
+    img1.set("resolution", "300")
+    img1.run()
+    
+    # 2. Plot de Deslocamento (solid.disp)
+    model.java.result().create("pg2", "PlotGroup3D")
+    model.java.result("pg2").create("surf2", "Surface")
+    model.java.result("pg2").feature("surf2").set("expr", "solid.disp")
+    
+    img2_path = os.path.join(plots_dir, "comsol_displacement.png")
+    img2 = model.java.result().export().create("img2", "Image")
+    img2.set("plotgroup", "pg2")
+    img2.set("filename", img2_path)
+    img2.set("size", "manualprint")
+    img2.set("unit", "mm")
+    img2.set("height", "150")
+    img2.set("width", "200")
+    img2.set("resolution", "300")
+    img2.run()
+
+    # 3. Exportar dados de texto (para gráfico Stress x Strain numérico)
+    export_path = os.path.abspath(file_path.replace(".mph", "_data.txt"))
+    export_data = model.java.result().export().create("data1", "Data")
+    
+    # Extrai posições, tensão, deslocamento total e deformação elástica (strain)
+    export_data.set("expr", ["x", "y", "z", "solid.mises", "solid.disp", "solid.edeve"])
+    export_data.set("filename", export_path)
+    export_data.run()
 
     return model
