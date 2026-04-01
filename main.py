@@ -6,7 +6,10 @@ import os
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
+import mph
 
+# Inicia o cliente (usa o binário em /usr/local/bin/comsol automaticamente)
+client = mph.start()
 
 # ============================================================
 # Plot helpers
@@ -262,14 +265,15 @@ def main():
     # 2. Construir Geometria 3D
     # ---------------------------
     model = build_geometry(
+        client   = client,
         H        = GEOMETRY["H"],
         V        = GEOMETRY["V"],
         h        = h,
         l        = l,
         theta    = theta,
         e        = e,
-        extrude  = SIMULATION["extrude"],
-        fillet   = SIMULATION["fillet"],
+        extrude  = GEOMETRY["extrude"],
+        fillet   = GEOMETRY["fillet"],
         metric   = unit,
         geom_path= PATHS["dxf"],
         array    = True,

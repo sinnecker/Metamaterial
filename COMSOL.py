@@ -3,8 +3,7 @@ import os
 import numpy as np
 
 
-
-def build_geometry(H, V, h, l, theta, e, extrude, fillet, metric, geom_path, array=False):
+def build_geometry(client,H, V, h, l, theta, e, extrude, fillet, metric, geom_path,array=False):
 
     theta = np.radians(theta)
     dx = l * np.sin(theta) #distancia horizontal
@@ -15,9 +14,6 @@ def build_geometry(H, V, h, l, theta, e, extrude, fillet, metric, geom_path, arr
     dz = 2*h - 2*dy  #espaço vertical de uma célula para outra
     dV = dz + 2*de 
     dH = 2*dx + e 
-    
-    # Inicia o cliente (usa o binário em /usr/local/bin/comsol automaticamente)
-    client = mph.start()
 
     model = client.create("Deformacao_Mecanica")
 

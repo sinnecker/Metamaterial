@@ -6,8 +6,10 @@ GEOMETRY = {
     "V":2,
     "h": 2,
     "l": 1,
-    "theta": 110,   # graus
-    "e": 0.2
+    "theta": 50,   # graus
+    "e": 0.2,
+    "extrude": 0.5,
+    "fillet": 0.2,
 }
 
 # ================================
@@ -31,8 +33,6 @@ MATERIAL = {
 # COMSOL / SIMULAÇÃO
 # ================================
 SIMULATION = {
-    "extrude": 1,
-    "fillet": 0.2,
     "force": "TotalForce",#("ForceArea", "ForceDefArea", "TotalForce", "FollowerPressure", "Resultant")
     "force_value": [300,0,0]
 }
@@ -41,13 +41,13 @@ SIMULATION = {
 # EXPERIMENTO
 # ================================
 EXPERIMENT = {
-    "type": "monotonic",      # "monotonic" ou "cyclic"
+    "type": "other",      # "monotonic" ou "cyclic"
     "force": 1, #compresion ou expassion
     # --- Compressão Monotônica ---
     "max_strain":      0.6,  # deformação máxima em X (fração, ex: 0.30 = 30%)
     "min_strain":      0.45,  # deformação mínima em X (fração, ex: 0.30 = 30%)
     "n_steps":         100,    # número de passos da varredura paramétrica
-    "NonLinear": True,
+    "NonLinear": True
 }
 
 # ================================
