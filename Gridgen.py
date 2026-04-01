@@ -23,8 +23,8 @@ def auxetic_cell(h=1.0, l=1.0, theta_deg=30, plot=False):
     """
     theta = np.radians(theta_deg)
 
-    dx = l * np.cos(theta)  # deslocamento horizontal da haste
-    dy = l * np.sin(theta)  # deslocamento vertical da haste
+    dx = l * np.sin(theta)  # deslocamento horizontal da haste
+    dy = l * np.cos(theta)  # deslocamento vertical da haste
 
     # Vértices do hexágono re-entrante (anti-horário, fechado)
     points = [
@@ -77,11 +77,11 @@ def grid_gen(e, h, l, theta):
     theta_rad = np.radians(theta)
     alpha = np.pi / 2 - theta_rad  # ângulo complementar
 
-    dx = l * np.cos(theta_rad)  # deslocamento horizontal da haste
-    dy = l * np.sin(theta_rad)  # deslocamento vertical da haste
+    dx = l * np.sin(theta_rad)  # deslocamento horizontal da haste
+    dy = l * np.cos(theta_rad)  # deslocamento vertical da haste
 
     # Espaço de parede entre fileiras (vertical) e entre colunas (horizontal)
-    de = e * np.tan(theta_rad) / 2 + e / np.sin(alpha)  # gap vertical entre fileiras
+    de = e * np.tan(alpha) / 2 + e / np.sin(theta_rad)  # gap vertical entre fileiras
     dz = 2 * h - 2 * dy                                  # altura livre dentro de uma coluna
 
     # Calcula a célula unitária base
@@ -111,12 +111,29 @@ def grid_gen(e, h, l, theta):
         # -------------------------------------------------------
         # Coleta todos os vértices de cada polígono no loop interno
         # -------------------------------------------------------
-        for (x, y) in unit_cell:
-            if valid_row:
-                new_poly1.append((x, y))
+        if theta_rad>np.pi/2:
+            for k,(x, y) in enumerate(unit_cell):
+                if valid_row:
+                    new_poly1.append((x, y))
+                
+                if k==0 or k==6:
+                    new_poly3.append((x - dx_shift-e*np.sin(theta_rad), y + base_y_shift -e*np.cos(theta_rad)))
+                    new_poly2.append((x + dx_shift+e*np.sin(theta_rad), y + base_y_shift -e*np.cos(theta_rad)))
+                elif k==3:
+                    new_poly3.append((x - dx_shift-e*np.sin(theta_rad), y + base_y_shift +e*np.cos(theta_rad)))
+                    new_poly2.append((x + dx_shift+e*np.sin(theta_rad), y + base_y_shift +e*np.cos(theta_rad)))
+                else:
+                    new_poly3.append((x - dx_shift, y+ base_y_shift))
+                    new_poly2.append((x + dx_shift, y+ base_y_shift))
+        
+        else:
+            for (x, y) in unit_cell:
+                if valid_row:
+                    new_poly1.append((x, y))
+                new_poly3.append((x - dx_shift, y+ base_y_shift))
+                new_poly2.append((x + dx_shift, y+ base_y_shift))
+            
 
-            new_poly2.append((x + dx_shift, y + base_y_shift))
-            new_poly3.append((x - dx_shift, y + base_y_shift))
 
         # -------------------------------------------------------
         # BUG CORRIGIDO: appends FORA do loop interno.

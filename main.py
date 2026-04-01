@@ -1,5 +1,5 @@
 from Gridgen import generate_dxf
-from COMSOL import build_geometry, apply_physics_compression, apply_physics_monotonic
+from COMSOL import build_geometry, apply_physics, apply_physics_monotonic
 from config import GEOMETRY, SCALE, MATERIAL, SIMULATION, EXPERIMENT, PATHS
 
 import os
@@ -313,13 +313,14 @@ def main():
     else:
         # Modo legado: compressão estática com força fixa
         print("[Experimento] Compressão estática (força fixa)")
-        model = apply_physics_compression(
+        model = apply_physics(
             model         = model,
             young_mod     = MATERIAL["E"],
             poisson_ratio = MATERIAL["nu"],
             density       = MATERIAL["rho"],
-            force         = SIMULATION["force"],
             file_path     = PATHS["mph"],
+            force         = SIMULATION["force"],
+            force_value   = SIMULATION["force_value"]
         )
 
         print("Modelo salvo em:", PATHS["mph"])

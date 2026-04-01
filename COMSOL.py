@@ -7,11 +7,11 @@ import numpy as np
 def build_geometry(H, V, h, l, theta, e, extrude, fillet, metric, geom_path, array=False):
 
     theta = np.radians(theta)
-    dx = l * np.cos(theta) #distancia horizontal
-    dy = l * np.sin(theta) #distancia vertical
+    dx = l * np.sin(theta) #distancia horizontal
+    dy = l * np.cos(theta) #distancia vertical
     alpha = np.pi/2 - theta
     #calcula o espaço entre as células
-    de = e * np.tan(theta)/2 + e / np.sin(alpha) #espaço vertical entre as fileiras de celulas
+    de = e * np.tan(alpha)/2 + e / np.sin(theta) #espaço vertical entre as fileiras de celulas
     dz = 2*h - 2*dy  #espaço vertical de uma célula para outra
     dV = dz + 2*de 
     dH = 2*dx + e 
@@ -155,7 +155,7 @@ def build_geometry(H, V, h, l, theta, e, extrude, fillet, metric, geom_path, arr
     model.java.component("comp1").geom("geom1").lengthUnit(metric)
     return model
 
-def apply_physics_compression(model, young_mod, poisson_ratio, density, force, file_path):
+def apply_physics(model, young_mod, poisson_ratio, density, file_path, force, force_value):
     
     # --------------------------------------------------
     # Selecionando as faces para condiçoes de contorno
@@ -212,8 +212,8 @@ def apply_physics_compression(model, young_mod, poisson_ratio, density, force, f
 
     load1 = physics.create('load1', 'BoundaryLoad', 2)
     load1.selection().named("rightWall")
-    load1.set("forceType", "ForceArea")
-    load1.set("forceReferenceArea", force)
+    load1.set("forceType", force)
+    load1.set("force", [str(k) for k in force_value])
 
     mat = model.java.component("comp1").material().create("mat1", "Common")
 
