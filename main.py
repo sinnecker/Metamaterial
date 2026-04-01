@@ -1,5 +1,5 @@
 from Gridgen import generate_dxf
-from COMSOL import build_geometry, apply_physics_compression
+from COMSOL import build_geometry, apply_physics
 from config import GEOMETRY, SCALE, MATERIAL, SIMULATION, PATHS
 
 import os
@@ -79,12 +79,14 @@ def main():
     # ---------------------------
     # 3. Aplicar Física e Simular (Compressão Simples)
     # ---------------------------
-    model = apply_physics_compression(
+    model = apply_physics(
         model=model,
         young_mod=MATERIAL["E"],
         poisson_ratio=MATERIAL["nu"],
         density=MATERIAL["rho"],
-        file_path=PATHS["mph"]
+        file_path=PATHS["mph"],
+        force=SIMULATION["force"],
+        force_value=SIMULATION["force_value"]
     )
 
     print("Modelo salvo em:", PATHS["mph"])

@@ -2,12 +2,12 @@
 # GEOMETRIA (forma da célula)
 # ================================
 GEOMETRY = {
-    "H":3,
+    "H":2,
     "V":2,
-    "h": 3,
-    "l": 2.5,
-    "theta": 20,   # graus
-    "e": 1
+    "h": 2,
+    "l": 1,
+    "theta": 110,   # graus
+    "e": 0.2
 }
 
 # ================================
@@ -15,7 +15,7 @@ GEOMETRY = {
 # ================================
 SCALE = {
     "scale": 1.0,
-    "unit": "um"
+    "unit": "mm"
 }
 
 # ================================
@@ -33,7 +33,8 @@ MATERIAL = {
 SIMULATION = {
     "extrude": 0.1,
     "fillet": 0.2,
-    "force": 300
+    "force": "TotalForce",#("ForceArea", "ForceDefArea", "TotalForce", "FollowerPressure", "Resultant")
+    "force_value": [300,0,0]
 }
 
 # ================================
