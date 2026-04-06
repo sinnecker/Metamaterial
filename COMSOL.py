@@ -67,50 +67,51 @@ def build_geometry(client,H, V, h, l, theta, e, extrude, fillet, metric, geom_pa
 
     geom1 = model.java.component("comp1").geom("geom1")
 
-    # --------------------------------------------------
-    # Seleciona os vértices para fillet
-    # Bounding box para selecionar
-    # --------------------------------------------------
-    xmin, xmax, ymin, ymax, _, _ = geom1.getBoundingBox()
-    epsilon = (xmax-xmin)*1e-4
-
-    wp.create("bbox1", "BoxSelection")
-    wp.feature("bbox1").set("entitydim", "0") 
-
-    wp.feature("bbox1").set("xmin", xmin+epsilon)
-    wp.feature("bbox1").set("xmax", xmax-epsilon)
-    wp.feature("bbox1").set("ymin", -e)
-    wp.feature("bbox1").set("ymax", l*np.sin(theta)-epsilon)
-
-    wp.run("bbox1")
-
-    wp.create("bbox2", "BoxSelection")
-    wp.feature("bbox2").set("entitydim", "0") 
-
-    wp.feature("bbox2").set("xmin", xmin+epsilon)
-    wp.feature("bbox2").set("xmax", xmax-epsilon)
-    wp.feature("bbox2").set("ymin", h-l*np.sin(theta)+epsilon)
-    wp.feature("bbox2").set("ymax", h+e)
-
-    wp.run("bbox2")
-
-    wp.create("unisel1", "UnionSelection")
-
-    wp.feature("unisel1").set("entitydim", "0")
-    wp.feature("unisel1").set("input", ["bbox1", "bbox2"])
-
-    wp.run("unisel1")
-
-    # --------------------------------------------------
-    # Fillet
-    # --------------------------------------------------
-    wp.create("fil1", "Fillet")
-
-    wp.feature("fil1").selection("pointinsketch").named("unisel1")
-
-    wp.feature("fil1").set("radius", fillet)
-
-    wp.run("fil1")
+    if fillet>0:
+        # --------------------------------------------------
+        # Seleciona os vértices para fillet
+        # Bounding box para selecionar
+        # --------------------------------------------------
+        xmin, xmax, ymin, ymax, _, _ = geom1.getBoundingBox()
+        epsilon = (xmax-xmin)*1e-4
+    
+        wp.create("bbox1", "BoxSelection")
+        wp.feature("bbox1").set("entitydim", "0") 
+    
+        wp.feature("bbox1").set("xmin", xmin+epsilon)
+        wp.feature("bbox1").set("xmax", xmax-epsilon)
+        wp.feature("bbox1").set("ymin", -e)
+        wp.feature("bbox1").set("ymax", l*np.cos(theta)-epsilon)
+    
+        wp.run("bbox1")
+    
+        wp.create("bbox2", "BoxSelection")
+        wp.feature("bbox2").set("entitydim", "0") 
+    
+        wp.feature("bbox2").set("xmin", xmin+epsilon)
+        wp.feature("bbox2").set("xmax", xmax-epsilon)
+        wp.feature("bbox2").set("ymin", h-l*np.cos(theta)+epsilon)
+        wp.feature("bbox2").set("ymax", h+e)
+    
+        wp.run("bbox2")
+    
+        wp.create("unisel1", "UnionSelection")
+    
+        wp.feature("unisel1").set("entitydim", "0")
+        wp.feature("unisel1").set("input", ["bbox1", "bbox2"])
+    
+        wp.run("unisel1")
+    
+        # --------------------------------------------------
+        # Fillet
+        # --------------------------------------------------
+        wp.create("fil1", "Fillet")
+    
+        wp.feature("fil1").selection("pointinsketch").named("unisel1")
+    
+        wp.feature("fil1").set("radius", fillet)
+    
+        wp.run("fil1")
 
 
     # --------------------------------------------------
@@ -151,7 +152,7 @@ def build_geometry(client,H, V, h, l, theta, e, extrude, fillet, metric, geom_pa
     model.java.component("comp1").geom("geom1").lengthUnit(metric)
     return model
 
-def apply_physics(model, young_mod, poisson_ratio, density, file_path, force, force_value):
+def apply_physics(model, young_mod, poisson_ratio, density, file_path, force, force_value, NonLinear, plot_data):
     
     # --------------------------------------------------
     # Selecionando as faces para condiçoes de contorno
@@ -218,8 +219,9 @@ def apply_physics(model, young_mod, poisson_ratio, density, file_path, force, fo
     mat.propertyGroup("def").set("density", str(density))
 
     study = model.java.study().create('std1')
-    study.create('stat', 'Stationary')
-
+    stat_step = study.create('stat', 'Stationary')
+    stat_step.set("geometricNonlinearity", NonLinear)
+    
     # 6. Solução
     model.java.sol().create('sol1')
     model.java.sol('sol1').study('std1')
@@ -240,51 +242,51 @@ def apply_physics(model, young_mod, poisson_ratio, density, file_path, force, fo
     # --------------------------------------------------
     # GERAR PLOTS (IMAGEM) E EXPORTAR DADOS (TEXTO)
     # --------------------------------------------------
+    if plot_data:
+        base_dir = os.path.dirname(os.path.abspath(file_path))
+        plots_dir = os.path.join(os.path.dirname(base_dir), "plots")
+        os.makedirs(plots_dir, exist_ok=True)
+        
+        # 1. Plot de Tensão (von Mises)
+        model.java.result().create("pg1", "PlotGroup3D")
+        model.java.result("pg1").create("surf1", "Surface")
+        model.java.result("pg1").feature("surf1").set("expr", "solid.mises")
+        
+        img1_path = os.path.join(plots_dir, "comsol_stress.png")
+        img1 = model.java.result().export().create("img1", "Image")
+        img1.set("plotgroup", "pg1")
+        img1.set("filename", img1_path)
+        img1.set("size", "manualprint")
+        img1.set("unit", "mm")
+        img1.set("height", "150")
+        img1.set("width", "200")
+        img1.set("resolution", "300")
+        img1.run()
+        
+        # 2. Plot de Deslocamento (solid.disp)
+        model.java.result().create("pg2", "PlotGroup3D")
+        model.java.result("pg2").create("surf2", "Surface")
+        model.java.result("pg2").feature("surf2").set("expr", "solid.disp")
+        
+        img2_path = os.path.join(plots_dir, "comsol_displacement.png")
+        img2 = model.java.result().export().create("img2", "Image")
+        img2.set("plotgroup", "pg2")
+        img2.set("filename", img2_path)
+        img2.set("size", "manualprint")
+        img2.set("unit", "mm")
+        img2.set("height", "150")
+        img2.set("width", "200")
+        img2.set("resolution", "300")
+        img2.run()
     
-    base_dir = os.path.dirname(os.path.abspath(file_path))
-    plots_dir = os.path.join(os.path.dirname(base_dir), "plots")
-    os.makedirs(plots_dir, exist_ok=True)
-    
-    # 1. Plot de Tensão (von Mises)
-    model.java.result().create("pg1", "PlotGroup3D")
-    model.java.result("pg1").create("surf1", "Surface")
-    model.java.result("pg1").feature("surf1").set("expr", "solid.mises")
-    
-    img1_path = os.path.join(plots_dir, "comsol_stress.png")
-    img1 = model.java.result().export().create("img1", "Image")
-    img1.set("plotgroup", "pg1")
-    img1.set("filename", img1_path)
-    img1.set("size", "manualprint")
-    img1.set("unit", "mm")
-    img1.set("height", "150")
-    img1.set("width", "200")
-    img1.set("resolution", "300")
-    img1.run()
-    
-    # 2. Plot de Deslocamento (solid.disp)
-    model.java.result().create("pg2", "PlotGroup3D")
-    model.java.result("pg2").create("surf2", "Surface")
-    model.java.result("pg2").feature("surf2").set("expr", "solid.disp")
-    
-    img2_path = os.path.join(plots_dir, "comsol_displacement.png")
-    img2 = model.java.result().export().create("img2", "Image")
-    img2.set("plotgroup", "pg2")
-    img2.set("filename", img2_path)
-    img2.set("size", "manualprint")
-    img2.set("unit", "mm")
-    img2.set("height", "150")
-    img2.set("width", "200")
-    img2.set("resolution", "300")
-    img2.run()
-
-    # 3. Exportar dados de texto (para gráfico Stress x Strain numérico)
-    export_path = os.path.abspath(file_path.replace(".mph", "_data.txt"))
-    export_data = model.java.result().export().create("data1", "Data")
-    
-    # Extrai posições, tensão, deslocamento total e deformação elástica (strain)
-    export_data.set("expr", ["x", "y", "z", "solid.mises", "solid.disp", "solid.edeve"])
-    export_data.set("filename", export_path)
-    export_data.run()
+        # 3. Exportar dados de texto (para gráfico Stress x Strain numérico)
+        export_path = os.path.abspath(file_path.replace(".mph", "_data.txt"))
+        export_data = model.java.result().export().create("data1", "Data")
+        
+        # Extrai posições, tensão, deslocamento total e deformação elástica (strain)
+        export_data.set("expr", ["x", "y", "z", "solid.mises", "solid.disp", "solid.edeve"])
+        export_data.set("filename", export_path)
+        export_data.run()
 
     return model
 
@@ -534,7 +536,7 @@ def apply_physics_monotonic(model, young_mod, poisson_ratio, density,
     img2.set("resolution", "300")
     img2.run()
 
-    # ------------------------------------------------------------------
+    # ------------------------------------------------------------------123
     # Salvar modelo
     # ------------------------------------------------------------------
     model.save(file_path)

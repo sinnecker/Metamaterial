@@ -324,7 +324,8 @@ def main():
             density       = MATERIAL["rho"],
             file_path     = PATHS["mph"],
             force         = SIMULATION["force"],
-            force_value   = SIMULATION["force_value"]
+            force_value   = SIMULATION["force_value"],
+            plot_data     = True
         )
 
         print("Modelo salvo em:", PATHS["mph"])

@@ -2,14 +2,14 @@
 # GEOMETRIA (forma da célula)
 # ================================
 GEOMETRY = {
-    "H":2,
-    "V":2,
+    "H":1,
+    "V":1,
     "h": 2,
     "l": 1,
-    "theta": 50,   # graus
-    "e": 0.2,
-    "extrude": 0.5,
-    "fillet": 0.2,
+    "theta": 40,   # graus
+    "e": 0.3,
+    "extrude": 0.3,
+    "fillet": 0.1,
 }
 
 # ================================
@@ -41,11 +41,11 @@ SIMULATION = {
 # EXPERIMENTO
 # ================================
 EXPERIMENT = {
-    "type": "other",      # "monotonic" ou "cyclic"
+    "type": "monotonic",      # "monotonic" ou "cyclic"
     "force": 1, #compresion ou expassion
     # --- Compressão Monotônica ---
-    "max_strain":      0.6,  # deformação máxima em X (fração, ex: 0.30 = 30%)
-    "min_strain":      0.45,  # deformação mínima em X (fração, ex: 0.30 = 30%)
+    "max_strain":      0.7,  # deformação máxima em X (fração, ex: 0.30 = 30%)
+    "min_strain":      0.3,  # deformação mínima em X (fração, ex: 0.30 = 30%)
     "n_steps":         100,    # número de passos da varredura paramétrica
     "NonLinear": True
 }
