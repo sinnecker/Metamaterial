@@ -248,12 +248,12 @@ def main():
     # Parâmetros de geometria
     # ---------------------------
     scale = SCALE["scale"]
-    h     = GEOMETRY["h"] * scale
-    l     = GEOMETRY["l"] * scale
+    h     = GEOMETRY["sy/sx"] * scale
+    l     = scale
     theta = GEOMETRY["theta"]
-    e     = GEOMETRY["e"] * scale
+    e     = GEOMETRY["widht/sx"] * scale
     unit  = SCALE["unit"]
-
+    extrude = GEOMETRY["thickness/sx"] * scale
     exp_type = EXPERIMENT["type"]
 
     # ---------------------------
@@ -272,7 +272,7 @@ def main():
         l        = l,
         theta    = theta,
         e        = e,
-        extrude  = GEOMETRY["extrude"],
+        extrude  = extrude,
         fillet   = GEOMETRY["fillet"],
         metric   = unit,
         geom_path= PATHS["dxf"],
@@ -325,7 +325,9 @@ def main():
             file_path     = PATHS["mph"],
             force         = SIMULATION["force"],
             force_value   = SIMULATION["force_value"],
-            plot_data     = True
+            plot_data     = EXPERIMENT["output_plot"],
+            NonLinear     = EXPERIMENT["NonLinear"],
+            cuda          = EXPERIMENT["cuda"]
         )
 
         print("Modelo salvo em:", PATHS["mph"])

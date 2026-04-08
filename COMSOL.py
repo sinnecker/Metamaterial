@@ -80,7 +80,7 @@ def build_geometry(client,H, V, h, l, theta, e, extrude, fillet, metric, geom_pa
     
         wp.feature("bbox1").set("xmin", xmin+epsilon)
         wp.feature("bbox1").set("xmax", xmax-epsilon)
-        wp.feature("bbox1").set("ymin", -e)
+        wp.feature("bbox1").set("ymin", -epsilon)
         wp.feature("bbox1").set("ymax", l*np.cos(theta)-epsilon)
     
         wp.run("bbox1")
@@ -91,7 +91,7 @@ def build_geometry(client,H, V, h, l, theta, e, extrude, fillet, metric, geom_pa
         wp.feature("bbox2").set("xmin", xmin+epsilon)
         wp.feature("bbox2").set("xmax", xmax-epsilon)
         wp.feature("bbox2").set("ymin", h-l*np.cos(theta)+epsilon)
-        wp.feature("bbox2").set("ymax", h+e)
+        wp.feature("bbox2").set("ymax", h+epsilon)
     
         wp.run("bbox2")
     
@@ -146,13 +146,12 @@ def build_geometry(client,H, V, h, l, theta, e, extrude, fillet, metric, geom_pa
 
     geom.run("ext1")
 
-
     geom.run()
-
+    
     model.java.component("comp1").geom("geom1").lengthUnit(metric)
     return model
 
-def apply_physics(model, young_mod, poisson_ratio, density, file_path, force, force_value, NonLinear, plot_data):
+def apply_physics(model, young_mod, poisson_ratio, density, file_path, force, force_value, NonLinear, plot_data, cuda):
     
     # --------------------------------------------------
     # Selecionando as faces para condiçoes de contorno
@@ -229,6 +228,8 @@ def apply_physics(model, young_mod, poisson_ratio, density, file_path, force, fo
     model.java.sol('sol1').feature('st1').set('study', 'std1')
     model.java.sol('sol1').create('v1', 'Variables')
     model.java.sol('sol1').create('s1', 'Stationary')
+    if cuda:
+        model.java.sol('sol1').feature('s1').feature('dDef').set('linsolver', 'cudss')
     
     # Roda a simulação de fato
     model.java.sol('sol1').runAll()
