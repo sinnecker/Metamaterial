@@ -545,3 +545,117 @@ def apply_physics_monotonic(model, young_mod, poisson_ratio, density,
     print(f"Dados globais exportados em: {global_data_path}")
 
     return model, global_data_path, A0, Lx, Ly
+
+
+def apply_physics_stiffness(model, young_mod, poisson_ratio, density, disp_val, file_path, cuda=False):
+    """
+    Simulação para extração de dados de rigidez (Kxx, Kxy, Kxz).
+    Usa deslocamentos prescritos e varredura paramétrica (axial: 1, 2, 3), 
+    similar ao modelo Java exportado.
+    """
+    geom1 = model.java.component("comp1").geom("geom1")
+    xmin, xmax, ymin, ymax, zmin, zmax = geom1.getBoundingBox()
+    Lx = xmax - xmin
+    epsilon = 1e-5 * Lx
+
+    model.java.param().set("axial", "1")
+    model.java.param().set("disp", f"{disp_val}[mm]")
+
+    # Selecoes
+    sel_left = model.java.component("comp1").selection().create("leftWall", "Box")
+    sel_left.geom("geom1", 2)
+    sel_left.set("xmin", xmin - epsilon)
+    sel_left.set("xmax", xmin + epsilon)
+    sel_left.set("ymin", ymin)
+    sel_left.set("ymax", ymax)
+    sel_left.set("zmin", zmin)
+    sel_left.set("zmax", zmax)
+    sel_left.set("condition", "allvertices")
+
+    sel_right = model.java.component("comp1").selection().create("rightWall", "Box")
+    sel_right.geom("geom1", 2)
+    sel_right.set("xmin", xmax - epsilon)
+    sel_right.set("xmax", xmax + epsilon)
+    sel_right.set("ymin", ymin)
+    sel_right.set("ymax", ymax)
+    sel_right.set("zmin", zmin)
+    sel_right.set("zmax", zmax)
+    sel_right.set("condition", "allvertices")
+
+    # Fisica
+    physics = model.java.component("comp1").physics().create("solid", "SolidMechanics", "geom1")
+    
+    fix1 = physics.create("fix1", "Fixed", 2)
+    fix1.selection().named("leftWall")
+
+    disp1 = physics.create("disp1", "Displacement2", 2)
+    disp1.selection().named("rightWall")
+    disp1.setIndex("Direction", "prescribed", 0)
+    disp1.setIndex("Direction", "prescribed", 1)
+    disp1.setIndex("Direction", "prescribed", 2)
+    disp1.setIndex("U0", "(axial==1)*disp", 0)
+    disp1.setIndex("U0", "(axial==2)*disp", 1)
+    disp1.setIndex("U0", "(axial==3)*disp", 2)
+
+    # Material
+    mat = model.java.component("comp1").material().create("mat1", "Common")
+    mat.propertyGroup("def").set("youngsmodulus", str(young_mod))
+    mat.propertyGroup("def").set("poissonsratio", str(poisson_ratio))
+    mat.propertyGroup("def").set("density", str(density))
+
+    # Operador de integracao na parede fixa
+    intop1 = model.java.component("comp1").cpl().create("intop1", "Integration")
+    intop1.selection().geom("geom1", 2)
+    intop1.selection().named("leftWall")
+
+    # Variaveis Kxx, Kxy, Kxz
+    var = model.java.component("comp1").variable().create("var1")
+    var.set("Kxx", f"intop1(solid.sx)/({disp_val}[mm])")
+    var.set("Kxy", f"intop1(solid.sy)/({disp_val}[mm])")
+    var.set("Kxz", f"intop1(solid.sz)/({disp_val}[mm])")
+
+    # Estudo
+    study = model.java.study().create("std1")
+    stat = study.create("stat", "Stationary")
+    stat.set("geometricNonlinearity", False)
+    
+    param = study.create("param", "Parametric")
+    param.set("sweeptype", "sparse")
+    param.setIndex("pname", "axial", 0)
+    param.setIndex("plistarr", "range(1,1,3)", 0)
+    
+    study.createAutoSequences("all")
+
+    if cuda:
+        try:
+            model.java.sol("sol1").feature("s1").feature("dDef").set("linsolver", "cudss")
+        except:
+            pass
+
+    model.java.sol("sol1").runAll()
+    model.build()
+
+    # Resultados
+    import os
+    base_dir  = os.path.dirname(os.path.abspath(file_path))
+    os.makedirs(base_dir, exist_ok=True)
+
+    tbl = model.java.result().table().create("tbl1", "Table")
+    tbl.comments("Stiffness Evaluation")
+
+    gev = model.java.result().numerical().create("gev1", "EvalGlobal")
+    gev.set("expr", ["Kxx", "Kxy", "Kxz"])
+    gev.set("table", "tbl1")
+    gev.setResult()
+
+    global_data_path = os.path.abspath(file_path.replace(".mph", "_stiffness.txt"))
+    tbl_export = model.java.result().export().create("tblexp1", "Table")
+    tbl_export.set("filename", global_data_path)
+    tbl_export.set("table", "tbl1")
+    tbl_export.run()
+
+    model.save(file_path)
+    print(f"Modelo salvo em: {file_path}")
+    print(f"Dados de rigidez exportados em: {global_data_path}")
+
+    return model

@@ -1,5 +1,5 @@
 from Gridgen import generate_dxf
-from COMSOL import build_geometry, apply_physics, apply_physics_monotonic
+from COMSOL import build_geometry, apply_physics, apply_physics_monotonic, apply_physics_stiffness
 from config import GEOMETRY, SCALE, MATERIAL, SIMULATION, EXPERIMENT, PATHS
 
 import os
@@ -314,8 +314,19 @@ def main():
                 geom_unit       = unit
             )
 
-    else:
+    elif exp_type == "stiffness":
         # Modo legado: compressão estática com força fixa
+        print("[Experimento] Deslocamento (força fixa)")
+        model = apply_physics_stiffness(
+            model         = model,
+            young_mod     = MATERIAL["E"],
+            poisson_ratio = MATERIAL["nu"],
+            density       = MATERIAL["rho"],
+            disp_val      = EXPERIMENT["displacement"],
+            file_path     = PATHS["mph"],
+            cuda          = EXPERIMENT["cuda"]
+        )    
+    else: 
         print("[Experimento] Compressão estática (força fixa)")
         model = apply_physics(
             model         = model,

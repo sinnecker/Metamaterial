@@ -40,12 +40,13 @@ SIMULATION = {
 # EXPERIMENTO
 # ================================
 EXPERIMENT = {
-    "type": "other",      # "monotonic" ou "cyclic"
+    "type": "stiffness",      # "stiffness" ou "cyclic" ou "normal"
     "force": 1, #compresion ou expassion
     # --- Compressão Monotônica ---
     "max_strain":      0.7,  # deformação máxima em X (fração, ex: 0.30 = 30%)
     "min_strain":      0.3,  # deformação mínima em X (fração, ex: 0.30 = 30%)
     "n_steps":         100,    # número de passos da varredura paramétrica
+    "displacement":    0.1, #displacement em X
     "NonLinear": False,
     "cuda": False,
     "output_plot": False,
