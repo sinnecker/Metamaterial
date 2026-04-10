@@ -23,7 +23,7 @@ SCALE = {
 # MATERIAL
 # ================================
 MATERIAL = {
-    "E": 1.124e12,     # Young (Pa)
+    "E": 170e9,     # Young (Pa)
     "nu": 0.28,      # Poisson
     "rho": 2329     # densidade
 }
@@ -33,7 +33,7 @@ MATERIAL = {
 # ================================
 SIMULATION = {
     "force": "TotalForce",#("ForceArea", "ForceDefArea", "TotalForce", "FollowerPressure", "Resultant")
-    "force_value": [300,0,0]
+    "force_value": [500,0,0]
 }
 
 # ================================

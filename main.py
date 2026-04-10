@@ -322,7 +322,7 @@ def main():
             young_mod     = MATERIAL["E"],
             poisson_ratio = MATERIAL["nu"],
             density       = MATERIAL["rho"],
-            disp_val      = EXPERIMENT["displacement"],
+            load_val      = SIMULATION["force_value"][0],
             file_path     = PATHS["mph"],
             cuda          = EXPERIMENT["cuda"]
         )    

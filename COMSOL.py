@@ -547,7 +547,7 @@ def apply_physics_monotonic(model, young_mod, poisson_ratio, density,
     return model, global_data_path, A0, Lx, Ly
 
 
-def apply_physics_stiffness(model, young_mod, poisson_ratio, density, disp_val, file_path, cuda=False):
+def apply_physics_stiffness(model, young_mod, poisson_ratio, density, load_val, file_path, cuda=False):
     """
     Simulação para extração de dados de rigidez (Kxx, Kxy, Kxz).
     Usa deslocamentos prescritos e varredura paramétrica (axial: 1, 2, 3), 
@@ -559,7 +559,7 @@ def apply_physics_stiffness(model, young_mod, poisson_ratio, density, disp_val, 
     epsilon = 1e-5 * Lx
 
     model.java.param().set("axial", "1")
-    model.java.param().set("disp", f"{disp_val}[mm]")
+    model.java.param().set("F0", f"{load_val}[N]")
 
     # Selecoes
     sel_left = model.java.component("comp1").selection().create("leftWall", "Box")
@@ -588,14 +588,10 @@ def apply_physics_stiffness(model, young_mod, poisson_ratio, density, disp_val, 
     fix1 = physics.create("fix1", "Fixed", 2)
     fix1.selection().named("leftWall")
 
-    disp1 = physics.create("disp1", "Displacement2", 2)
-    disp1.selection().named("rightWall")
-    disp1.setIndex("Direction", "prescribed", 0)
-    disp1.setIndex("Direction", "prescribed", 1)
-    disp1.setIndex("Direction", "prescribed", 2)
-    disp1.setIndex("U0", "(axial==1)*disp", 0)
-    disp1.setIndex("U0", "(axial==2)*disp", 1)
-    disp1.setIndex("U0", "(axial==3)*disp", 2)
+    bndl1 = physics.create("bndl1", "BoundaryLoad", 2)
+    bndl1.selection().named("rightWall")
+    bndl1.set("forceType", "TotalForce")
+    bndl1.set("force", ["(axial==1)*F0", "(axial==2)*F0", "(axial==3)*F0"])
 
     # Material
     mat = model.java.component("comp1").material().create("mat1", "Common")
@@ -605,14 +601,21 @@ def apply_physics_stiffness(model, young_mod, poisson_ratio, density, disp_val, 
 
     # Operador de integracao na parede fixa
     intop1 = model.java.component("comp1").cpl().create("intop1", "Integration")
+    intop1.set("method", "summation")
     intop1.selection().geom("geom1", 2)
     intop1.selection().named("leftWall")
 
-    # Variaveis Kxx, Kxy, Kxz
+    # Operador de media na parede movel
+    aveop1 = model.java.component("comp1").cpl().create("aveop1", "Average")
+    aveop1.selection().geom("geom1", 2)
+    aveop1.selection().named("rightWall")
+
+    # Variaveis Kxx, Kxy, Kxz, P1
     var = model.java.component("comp1").variable().create("var1")
-    var.set("Kxx", f"intop1(solid.sx)/({disp_val}[mm])")
-    var.set("Kxy", f"intop1(solid.sy)/({disp_val}[mm])")
-    var.set("Kxz", f"intop1(solid.sz)/({disp_val}[mm])")
+    var.set("Kxx", "abs(intop1(solid.RFx)/aveop1(u))")
+    var.set("Kxy", "abs(intop1(solid.RFy)/aveop1(v))")
+    var.set("Kxz", "abs(intop1(solid.RFz)/aveop1(w))")
+    var.set("P1", "-aveop1(v)/aveop1(u)")
 
     # Estudo
     study = model.java.study().create("std1")
@@ -636,26 +639,27 @@ def apply_physics_stiffness(model, young_mod, poisson_ratio, density, disp_val, 
     model.build()
 
     # Resultados
-    import os
-    base_dir  = os.path.dirname(os.path.abspath(file_path))
-    os.makedirs(base_dir, exist_ok=True)
+    if file_path!=None:
+        import os
+        base_dir  = os.path.dirname(os.path.abspath(file_path))
+        os.makedirs(base_dir, exist_ok=True)
 
-    tbl = model.java.result().table().create("tbl1", "Table")
-    tbl.comments("Stiffness Evaluation")
+        tbl = model.java.result().table().create("tbl1", "Table")
+        tbl.comments("Stiffness Evaluation")
 
-    gev = model.java.result().numerical().create("gev1", "EvalGlobal")
-    gev.set("expr", ["Kxx", "Kxy", "Kxz"])
-    gev.set("table", "tbl1")
-    gev.setResult()
+        gev = model.java.result().numerical().create("gev1", "EvalGlobal")
+        gev.set("expr", ["Kxx", "Kxy", "Kxz", "P1"])
+        gev.set("table", "tbl1")
+        gev.setResult()
 
-    global_data_path = os.path.abspath(file_path.replace(".mph", "_stiffness.txt"))
-    tbl_export = model.java.result().export().create("tblexp1", "Table")
-    tbl_export.set("filename", global_data_path)
-    tbl_export.set("table", "tbl1")
-    tbl_export.run()
+        global_data_path = os.path.abspath(file_path.replace(".mph", "_stiffness.txt"))
+        tbl_export = model.java.result().export().create("tblexp1", "Table")
+        tbl_export.set("filename", global_data_path)
+        tbl_export.set("table", "tbl1")
+        tbl_export.run()
 
-    model.save(file_path)
-    print(f"Modelo salvo em: {file_path}")
-    print(f"Dados de rigidez exportados em: {global_data_path}")
+        model.save(file_path)
+        print(f"Modelo salvo em: {file_path}")
+        print(f"Dados de rigidez exportados em: {global_data_path}")
 
     return model
