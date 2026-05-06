@@ -156,15 +156,16 @@ def grid_gen(e, h, l, theta):
 
     # y: usa os extremos das meias células (poly3), com offset de h/2
     # para que a bbox seja simétrica e represente a unidade de repetição
-    ymin = min(pt[1] for pt in all_polygons3[0]) + h / 2
-    ymax = max(pt[1] for pt in all_polygons3[1]) - h / 2
+    ymin = all_polygons3[0][1][1] - h / 2
+    ymax = all_polygons3[1][4][1] + h / 2
 
     # Adiciona a espessura de parede ao contorno
+    ytol = e*1e-3
     bbox = [
-        (xmin - e, ymin),
-        (xmin - e, ymax),
-        (xmax + e, ymax),
-        (xmax + e, ymin),
+        (xmin - e, ymin-ytol),
+        (xmin - e, ymax+ytol),
+        (xmax + e, ymax+ytol),
+        (xmax + e, ymin-ytol),
     ]
 
     return all_polygons1, all_polygons2, all_polygons3, bbox
@@ -225,7 +226,6 @@ def export_void_to_dxf(polygons, cell_polygon, filename="void_mesh.dxf"):
             add_polygon(p)
 
     doc.saveas(filename)
-    print(f"DXF exportado com sucesso: {filename}")
     return void
 
 
