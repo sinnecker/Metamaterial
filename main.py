@@ -323,7 +323,10 @@ def main():
             poisson_ratio = MATERIAL["nu"],
             density       = MATERIAL["rho"],
             load_val      = SIMULATION["force_value"][0],
+            maxiter       = SIMULATION["maxiter"],
             file_path     = PATHS["mph"],
+            save_data     = False,
+            NonLinear     = EXPERIMENT["NonLinear"],
             cuda          = EXPERIMENT["cuda"]
         )    
     else: 

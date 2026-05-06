@@ -238,7 +238,8 @@ def apply_physics(model, young_mod, poisson_ratio, density, file_path, force, fo
     # --------------------------------------------------
     # SALVAR MODELO
     # --------------------------------------------------
-    model.save(file_path)
+    if file_path!=None:
+        model.save(file_path)
     
     # --------------------------------------------------
     # GERAR PLOTS (IMAGEM) E EXPORTAR DADOS (TEXTO)
@@ -547,7 +548,7 @@ def apply_physics_monotonic(model, young_mod, poisson_ratio, density,
     return model, global_data_path, A0, Lx, Ly
 
 
-def apply_physics_stiffness(model, young_mod, poisson_ratio, density, load_val, file_path, cuda=False):
+def apply_physics_stiffness(model, young_mod, poisson_ratio, density, load_val, file_path, maxiter=100,save_data=False,NonLinear=False,cuda=False):
     """
     Simulação para extração de dados de rigidez (Kxx, Kxy, Kxz).
     Usa deslocamentos prescritos e varredura paramétrica (axial: 1, 2, 3), 
@@ -556,7 +557,9 @@ def apply_physics_stiffness(model, young_mod, poisson_ratio, density, load_val, 
     geom1 = model.java.component("comp1").geom("geom1")
     xmin, xmax, ymin, ymax, zmin, zmax = geom1.getBoundingBox()
     Lx = xmax - xmin
-    epsilon = 1e-5 * Lx
+    Ly = ymax - ymin
+    epsilonx = 1e-5 * Lx
+    epsilony = 1e-5 * Ly
 
     model.java.param().set("axial", "1")
     model.java.param().set("F0", f"{load_val}[N]")
@@ -564,8 +567,8 @@ def apply_physics_stiffness(model, young_mod, poisson_ratio, density, load_val, 
     # Selecoes
     sel_left = model.java.component("comp1").selection().create("leftWall", "Box")
     sel_left.geom("geom1", 2)
-    sel_left.set("xmin", xmin - epsilon)
-    sel_left.set("xmax", xmin + epsilon)
+    sel_left.set("xmin", xmin - epsilonx)
+    sel_left.set("xmax", xmin + epsilonx)
     sel_left.set("ymin", ymin)
     sel_left.set("ymax", ymax)
     sel_left.set("zmin", zmin)
@@ -574,13 +577,35 @@ def apply_physics_stiffness(model, young_mod, poisson_ratio, density, load_val, 
 
     sel_right = model.java.component("comp1").selection().create("rightWall", "Box")
     sel_right.geom("geom1", 2)
-    sel_right.set("xmin", xmax - epsilon)
-    sel_right.set("xmax", xmax + epsilon)
+    sel_right.set("xmin", xmax - epsilonx)
+    sel_right.set("xmax", xmax + epsilonx)
     sel_right.set("ymin", ymin)
     sel_right.set("ymax", ymax)
     sel_right.set("zmin", zmin)
     sel_right.set("zmax", zmax)
     sel_right.set("condition", "allvertices")
+
+
+    sel_left = model.java.component("comp1").selection().create("downWall", "Box")
+    sel_left.geom("geom1", 2)
+    sel_left.set("xmin", xmin)
+    sel_left.set("xmax", xmax)
+    sel_left.set("ymin", ymin - epsilony)
+    sel_left.set("ymax", ymin + epsilony)
+    sel_left.set("zmin", zmin)
+    sel_left.set("zmax", zmax)
+    sel_left.set("condition", "allvertices")
+
+    sel_left = model.java.component("comp1").selection().create("upWall", "Box")
+    sel_left.geom("geom1", 2)
+    sel_left.set("xmin", xmin)
+    sel_left.set("xmax", xmax)
+    sel_left.set("ymin", ymax - epsilony)
+    sel_left.set("ymax", ymax + epsilony)
+    sel_left.set("zmin", zmin)
+    sel_left.set("zmax", zmax)
+    sel_left.set("condition", "allvertices")
+    
 
     # Fisica
     physics = model.java.component("comp1").physics().create("solid", "SolidMechanics", "geom1")
@@ -610,17 +635,31 @@ def apply_physics_stiffness(model, young_mod, poisson_ratio, density, load_val, 
     aveop1.selection().geom("geom1", 2)
     aveop1.selection().named("rightWall")
 
+    aveop1 = model.java.component("comp1").cpl().create("aveop2", "Average")
+    aveop1.selection().geom("geom1", 2)
+    aveop1.selection().named("leftWall")
+
+    aveop1 = model.java.component("comp1").cpl().create("aveop3", "Average")
+    aveop1.selection().geom("geom1", 2)
+    aveop1.selection().named("upWall")
+
+    aveop1 = model.java.component("comp1").cpl().create("aveop4", "Average")
+    aveop1.selection().geom("geom1", 2)
+    aveop1.selection().named("downWall")
+
     # Variaveis Kxx, Kxy, Kxz, P1
     var = model.java.component("comp1").variable().create("var1")
     var.set("Kxx", "abs(intop1(solid.RFx)/aveop1(u))")
     var.set("Kxy", "abs(intop1(solid.RFy)/aveop1(v))")
     var.set("Kxz", "abs(intop1(solid.RFz)/aveop1(w))")
-    var.set("P1", "-aveop1(v)/aveop1(u)")
+    var.set("ep_x", "aveop1(u)-aveop2(u)")
+    var.set("ep_y", "aveop3(v)-aveop4(v)")
+    var.set("poisson", "-ep_y/ep_x")
 
     # Estudo
     study = model.java.study().create("std1")
     stat = study.create("stat", "Stationary")
-    stat.set("geometricNonlinearity", False)
+    stat.set("geometricNonlinearity", NonLinear)
     
     param = study.create("param", "Parametric")
     param.set("sweeptype", "sparse")
@@ -628,7 +667,8 @@ def apply_physics_stiffness(model, young_mod, poisson_ratio, density, load_val, 
     param.setIndex("plistarr", "range(1,1,3)", 0)
     
     study.createAutoSequences("all")
-
+    model.java.sol("sol1").feature("s1").feature("fc1").set("ntermauto", "itertol")
+    model.java.sol("sol1").feature("s1").feature("fc1").set("niter", str(maxiter))
     if cuda:
         try:
             model.java.sol("sol1").feature("s1").feature("dDef").set("linsolver", "cudss")
@@ -644,22 +684,23 @@ def apply_physics_stiffness(model, young_mod, poisson_ratio, density, load_val, 
         base_dir  = os.path.dirname(os.path.abspath(file_path))
         os.makedirs(base_dir, exist_ok=True)
 
-        tbl = model.java.result().table().create("tbl1", "Table")
-        tbl.comments("Stiffness Evaluation")
-
-        gev = model.java.result().numerical().create("gev1", "EvalGlobal")
-        gev.set("expr", ["Kxx", "Kxy", "Kxz", "P1"])
-        gev.set("table", "tbl1")
-        gev.setResult()
-
-        global_data_path = os.path.abspath(file_path.replace(".mph", "_stiffness.txt"))
-        tbl_export = model.java.result().export().create("tblexp1", "Table")
-        tbl_export.set("filename", global_data_path)
-        tbl_export.set("table", "tbl1")
-        tbl_export.run()
-
+        if save_data:
+            tbl = model.java.result().table().create("tbl1", "Table")
+            tbl.comments("Stiffness Evaluation")
+    
+            gev = model.java.result().numerical().create("gev1", "EvalGlobal")
+            gev.set("expr", ["Kxx", "Kxy", "Kxz", "poisson"])
+            gev.set("table", "tbl1")
+            gev.setResult()
+    
+            global_data_path = os.path.abspath(file_path.replace(".mph", "_stiffness.txt"))
+            tbl_export = model.java.result().export().create("tblexp1", "Table")
+            tbl_export.set("filename", global_data_path)
+            tbl_export.set("table", "tbl1")
+            tbl_export.run()
+            print(f"Dados de rigidez exportados em: {global_data_path}")
+        
         model.save(file_path)
         print(f"Modelo salvo em: {file_path}")
-        print(f"Dados de rigidez exportados em: {global_data_path}")
 
     return model
