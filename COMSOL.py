@@ -3,7 +3,7 @@ import os
 import numpy as np
 
 
-def build_geometry(client,H, V, h, l, theta, e, extrude, fillet, metric, geom_path,array=False):
+def build_geometry(client,H, V, h, l, theta, e, extrude, fillet, metric, geom_path, file_path,array=False):
 
     theta = np.radians(theta)
     dx = l * np.sin(theta) #distancia horizontal
@@ -26,9 +26,7 @@ def build_geometry(client,H, V, h, l, theta, e, extrude, fillet, metric, geom_pa
     geom.geomRep("cadps")
     geom.designBooleans(True)
 
-    model.java.component("comp1").mesh().create("mesh1")
-    model.java.component("comp1").mesh("mesh1").contribute("geom/detail", True)
-
+    
     # --------------------------------------------------
     # Cria a geometria 2D (work plane)
     # --------------------------------------------------
@@ -149,6 +147,11 @@ def build_geometry(client,H, V, h, l, theta, e, extrude, fillet, metric, geom_pa
     geom.run()
     
     model.java.component("comp1").geom("geom1").lengthUnit(metric)
+
+    if file_path!=None:
+        model.build()
+        model.save(file_path)
+        
     return model
 
 def apply_physics(model, young_mod, poisson_ratio, density, file_path, force, force_value, NonLinear, plot_data, cuda):
@@ -232,14 +235,16 @@ def apply_physics(model, young_mod, poisson_ratio, density, file_path, force, fo
         model.java.sol('sol1').feature('s1').feature('dDef').set('linsolver', 'cudss')
     
     # Roda a simulação de fato
-    model.java.sol('sol1').runAll()
-    model.build()
 
-    # --------------------------------------------------
+        # --------------------------------------------------
     # SALVAR MODELO
     # --------------------------------------------------
     if file_path!=None:
+        model.build()
         model.save(file_path)
+    model.java.sol('sol1').runAll()
+    model.build()
+
     
     # --------------------------------------------------
     # GERAR PLOTS (IMAGEM) E EXPORTAR DADOS (TEXTO)
@@ -548,7 +553,7 @@ def apply_physics_monotonic(model, young_mod, poisson_ratio, density,
     return model, global_data_path, A0, Lx, Ly
 
 
-def apply_physics_stiffness(model, young_mod, poisson_ratio, density, load_val, file_path, maxiter=100,save_data=False,NonLinear=False,cuda=False):
+def apply_physics_stiffness(model, young_mod, poisson_ratio, density, load_val, file_path, maxiter=100,save_data=False,NonLinear=False,pre_solve=None,cuda=False):
     """
     Simulação para extração de dados de rigidez (Kxx, Kxy, Kxz).
     Usa deslocamentos prescritos e varredura paramétrica (axial: 1, 2, 3), 
@@ -615,8 +620,8 @@ def apply_physics_stiffness(model, young_mod, poisson_ratio, density, load_val, 
 
     bndl1 = physics.create("bndl1", "BoundaryLoad", 2)
     bndl1.selection().named("rightWall")
-    bndl1.set("forceType", "TotalForce")
-    bndl1.set("force", ["(axial==1)*F0", "(axial==2)*F0", "(axial==3)*F0"])
+    bndl1.set("forceType", "ForceArea")
+    bndl1.set("forceReferenceArea", ["(axial==1)*F0", "(axial==2)*F0", "(axial==3)*F0"])
 
     # Material
     mat = model.java.component("comp1").material().create("mat1", "Common")
@@ -669,12 +674,20 @@ def apply_physics_stiffness(model, young_mod, poisson_ratio, density, load_val, 
     study.createAutoSequences("all")
     model.java.sol("sol1").feature("s1").feature("fc1").set("ntermauto", "itertol")
     model.java.sol("sol1").feature("s1").feature("fc1").set("niter", str(maxiter))
+
+    model.java.component("comp1").mesh().create("mesh1")
+    model.java.component("comp1").mesh("mesh1").contribute("geom/detail", True)
+    model.java.component("comp1").mesh("mesh1").run()
     if cuda:
         try:
+            model.java.sol("sol1").feature("s1").feature("fc1").set("linsolver", "dDef")
             model.java.sol("sol1").feature("s1").feature("dDef").set("linsolver", "cudss")
         except:
+            print("NO CUDA")
             pass
-
+    if pre_solve!=None:
+        model.build()
+        model.save(file_path)
     model.java.sol("sol1").runAll()
     model.build()
 
@@ -704,3 +717,5 @@ def apply_physics_stiffness(model, young_mod, poisson_ratio, density, load_val, 
         print(f"Modelo salvo em: {file_path}")
 
     return model
+
+
