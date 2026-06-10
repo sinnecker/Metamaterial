@@ -117,7 +117,10 @@ def build_geometry(client,H, V, h, l, theta, e, extrude, fillet, metric, geom_pa
     # --------------------------------------------------
     if array:
         wp.create("arr1", "Array")
-        wp.feature("arr1").selection("input").set("fil1") 
+        if fillet>0:
+            wp.feature("arr1").selection("input").set("fil1") 
+        else:
+            wp.feature("arr1").selection("input").set("dif1") 
         wp.feature("arr1").set("displ", [str(dH),str(dV)])
         wp.feature("arr1").set("fullsize",[str(H),str(V)])
 
@@ -128,6 +131,8 @@ def build_geometry(client,H, V, h, l, theta, e, extrude, fillet, metric, geom_pa
         wp.feature("uni_arr").set("intbnd", False)
 
         wp.run("uni_arr")
+
+        
     # --------------------------------------------------
     # Extrude do working plane
     # --------------------------------------------------
@@ -144,6 +149,12 @@ def build_geometry(client,H, V, h, l, theta, e, extrude, fillet, metric, geom_pa
 
     geom.run("ext1")
 
+    geom.run("fin");
+    geom.feature().create("rmd1", "RemoveDetails");
+    geom.feature("rmd1").set("detailsizetype", "absolute");
+    geom.feature("rmd1").set("maxabssize", "0.01");
+    geom.run("rmd1");
+    
     geom.run()
     
     model.java.component("comp1").geom("geom1").lengthUnit(metric)
@@ -719,3 +730,222 @@ def apply_physics_stiffness(model, young_mod, poisson_ratio, density, load_val, 
     return model
 
 
+def create_physics_stiffness(model, young_mod, poisson_ratio, density, load_val, file_path):
+    """
+    Cria a física para extração de dados de rigidez (Kxx, Kxy, Kxz).
+    Define seleções, condições de contorno, material, operadores de
+    acoplamento e variáveis. Usa deslocamentos prescritos com varredura
+    paramétrica (axial: 1, 2, 3).
+    """
+    geom1 = model.java.component("comp1").geom("geom1")
+    xmin, xmax, ymin, ymax, zmin, zmax = geom1.getBoundingBox()
+    Lx = xmax - xmin
+    Ly = ymax - ymin
+    epsilonx = 1e-5 * Lx
+    epsilony = 1e-5 * Ly
+
+    model.java.param().set("axial", "1")
+    model.java.param().set("F0", f"{load_val}[N]")
+
+    # Selecoes
+    sel_left = model.java.component("comp1").selection().create("leftWall", "Box")
+    sel_left.geom("geom1", 2)
+    sel_left.set("xmin", xmin - epsilonx)
+    sel_left.set("xmax", xmin + epsilonx)
+    sel_left.set("ymin", ymin)
+    sel_left.set("ymax", ymax)
+    sel_left.set("zmin", zmin)
+    sel_left.set("zmax", zmax)
+    sel_left.set("condition", "allvertices")
+
+    sel_right = model.java.component("comp1").selection().create("rightWall", "Box")
+    sel_right.geom("geom1", 2)
+    sel_right.set("xmin", xmax - epsilonx)
+    sel_right.set("xmax", xmax + epsilonx)
+    sel_right.set("ymin", ymin)
+    sel_right.set("ymax", ymax)
+    sel_right.set("zmin", zmin)
+    sel_right.set("zmax", zmax)
+    sel_right.set("condition", "allvertices")
+
+    sel_down = model.java.component("comp1").selection().create("downWall", "Box")
+    sel_down.geom("geom1", 2)
+    sel_down.set("xmin", xmin)
+    sel_down.set("xmax", xmax)
+    sel_down.set("ymin", ymin - epsilony)
+    sel_down.set("ymax", ymin + epsilony)
+    sel_down.set("zmin", zmin)
+    sel_down.set("zmax", zmax)
+    sel_down.set("condition", "allvertices")
+
+    sel_up = model.java.component("comp1").selection().create("upWall", "Box")
+    sel_up.geom("geom1", 2)
+    sel_up.set("xmin", xmin)
+    sel_up.set("xmax", xmax)
+    sel_up.set("ymin", ymax - epsilony)
+    sel_up.set("ymax", ymax + epsilony)
+    sel_up.set("zmin", zmin)
+    sel_up.set("zmax", zmax)
+    sel_up.set("condition", "allvertices")
+
+    union1 = model.java.component("comp1").selection().create("union1", "Union")
+    union1.geom("geom1", 2)
+    union1.set("input", ["downWall", "upWall"])
+
+    
+    # Fisica
+    physics = model.java.component("comp1").physics().create("solid", "SolidMechanics", "geom1")
+
+    fix1 = physics.create("fix1", "Fixed", 2)
+    fix1.selection().named("leftWall")
+
+    bndl1 = physics.create("bndl1", "BoundaryLoad", 2)
+    bndl1.selection().named("rightWall")
+    
+    #bndl1.set("FperArea", ["(axial==1)*F0", "(axial==2)*F0", "(axial==3)*F0"])
+
+    
+    bndl1.set("forceType", "ForceArea")
+    bndl1.set("forceReferenceArea", ["(axial==1)*F0", "(axial==2)*F0", "(axial==3)*F0"])
+
+    #per1 = physics.create("per1", "PeriodicCondition", 2)
+    #per1.selection().named("union1")
+    # Material
+    mat = model.java.component("comp1").material().create("mat1", "Common")
+    mat.propertyGroup("def").set("youngsmodulus", str(young_mod))
+    mat.propertyGroup("def").set("poissonsratio", str(poisson_ratio))
+    mat.propertyGroup("def").set("density", str(density))
+
+    # Operador de integracao na parede fixa
+    intop1 = model.java.component("comp1").cpl().create("intop1", "Integration")
+    intop1.set("method", "summation")
+    intop1.selection().geom("geom1", 2)
+    intop1.selection().named("leftWall")
+    
+    # Operadores de media nas paredes
+    aveop1 = model.java.component("comp1").cpl().create("aveop1", "Average")
+    aveop1.selection().geom("geom1", 2)
+    aveop1.selection().named("rightWall")
+
+    aveop2 = model.java.component("comp1").cpl().create("aveop2", "Average")
+    aveop2.selection().geom("geom1", 2)
+    aveop2.selection().named("leftWall")
+
+    aveop3 = model.java.component("comp1").cpl().create("aveop3", "Average")
+    aveop3.selection().geom("geom1", 2)
+    aveop3.selection().named("upWall")
+
+    aveop4 = model.java.component("comp1").cpl().create("aveop4", "Average")
+    aveop4.selection().geom("geom1", 2)
+    aveop4.selection().named("downWall")
+
+    # Variaveis Kxx, Kxy, Kxz, poisson
+    var = model.java.component("comp1").variable().create("var1")
+    var.set("Kxx", "abs(intop1(solid.RFx)/aveop1(u))")
+    var.set("Kxy", "abs(intop1(solid.RFy)/aveop1(v))")
+    var.set("Kxz", "abs(intop1(solid.RFz)/aveop1(w))")
+    var.set("ep_x", "aveop1(u)-aveop2(u)")
+    var.set("ep_y", "aveop3(v)-aveop4(v)")
+    var.set("poisson", "-ep_y/ep_x")
+
+
+    model.java.component("comp1").mesh().create("mesh1")
+    model.java.component("comp1").mesh("mesh1").contribute("geom/detail", True)
+    model.java.component("comp1").mesh("mesh1").run()
+    if file_path!=None:
+        model.save(file_path)
+    return model
+
+
+def _create_study(model, NonLinear=False):
+    """
+    Cria o estudo Stationary + varredura paramétrica (axial 1..3).
+    NÃO cria o sol1 (cada função de solver é responsável por isso).
+    """
+    study = model.java.study().create("std1")
+    stat = study.create("stat", "Stationary")
+    stat.set("geometricNonlinearity", NonLinear)
+
+    param = study.create("param", "Parametric")
+    param.set("sweeptype", "sparse")
+    param.setIndex("pname", "axial", 0)
+    param.setIndex("plistarr", "range(1,1,3)", 0)
+    study.createAutoSequences("all")
+    
+    return study
+
+
+def create_solver_direct(model, NonLinear=False, maxiter=100, file_path=None):
+    """
+    Cria um solver Stationary com solver linear DIRETO (default do Comsol).
+    Equivalente ao Java:
+
+        model.sol().create("sol1");
+        model.sol("sol1").study("std1");
+        model.sol("sol1").create("s1", "Stationary");
+        model.sol("sol1").feature("s1").create("d1", "Direct");
+        model.sol("sol1").feature("s1").feature("fcDef").set("linsolver", "d1");
+    """
+    _create_study(model, NonLinear=NonLinear)
+
+    s1 = model.java.sol("sol1").feature("s1")
+    s1.feature("fc1").set("linsolver", "d1")
+    s1.feature("fc1").set("ntermauto", "itertol")
+    s1.feature("fc1").set("niter", str(maxiter))
+
+    if file_path!=None:
+        model.save(file_path)
+    
+    return model
+
+def create_solver_iterative(model, NonLinear=False, maxiter=100, file_path=None):
+    """
+    Cria um solver Stationary com solver linear ITERATIVO.
+    Equivalente ao Java fornecido:
+
+        model.sol().create("sol1");
+        model.sol("sol1").study("std1");
+        model.sol("sol1").create("s1", "Stationary");
+        model.sol("sol1").feature("s1").create("d1", "Direct");
+        model.sol("sol1").feature("s1").create("i1", "Iterative");
+        model.sol("sol1").feature("s1").feature("fcDef").set("linsolver", "i1");
+    """
+    _create_study(model, NonLinear=NonLinear)
+
+    s1 = model.java.sol("sol1").feature("s1")
+    s1.feature("fc1").set("linsolver", "i1")
+    s1.feature("fc1").set("ntermauto", "itertol")
+    s1.feature("fc1").set("niter", str(maxiter))
+
+    if file_path!=None:
+        model.save(file_path)
+    
+    return model
+
+def create_solver_cuda(model, NonLinear=False, maxiter=100, file_path=None):
+    """
+    Cria um solver Stationary usando o solver linear CUDA (cudss),
+    com fallback para Direct caso CUDA não esteja disponível.
+    """
+    _create_study(model, NonLinear=NonLinear)
+
+    sol = model.java.sol().create("sol1")
+    sol.study("std1")
+    sol.create("st1", "StudyStep")
+    s1 = sol.create("s1", "Stationary")
+    s1.create("d1", "Direct")
+    s1.create("dDef", "Direct")
+    s1.feature("fcDef").set("ntermauto", "itertol")
+    s1.feature("fcDef").set("niter", str(maxiter))
+
+    try:
+        s1.feature("dDef").set("linsolver", "cudss")
+        s1.feature("fcDef").set("linsolver", "dDef")
+    except Exception:
+        print("NO CUDA - fallback para Direct (d1)")
+        s1.feature("fcDef").set("linsolver", "d1")
+
+    if file_path!=None:
+        model.save(file_path)
+    
+    return model
