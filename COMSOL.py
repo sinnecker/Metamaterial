@@ -730,7 +730,7 @@ def apply_physics_stiffness(model, young_mod, poisson_ratio, density, load_val, 
     return model
 
 
-def create_physics_stiffness(model, young_mod, poisson_ratio, density, load_val, file_path):
+def create_physics_stiffness_x(model, e, h, metric, young_mod, poisson_ratio, density, load_val, file_path):
     """
     Cria a física para extração de dados de rigidez (Kxx, Kxy, Kxz).
     Define seleções, condições de contorno, material, operadores de
@@ -745,7 +745,7 @@ def create_physics_stiffness(model, young_mod, poisson_ratio, density, load_val,
     epsilony = 1e-5 * Ly
 
     model.java.param().set("axial", "1")
-    model.java.param().set("F0", f"{load_val}[N]")
+    model.java.param().set("disp", "1")
 
     # Selecoes
     sel_left = model.java.component("comp1").selection().create("leftWall", "Box")
@@ -770,23 +770,23 @@ def create_physics_stiffness(model, young_mod, poisson_ratio, density, load_val,
 
     sel_down = model.java.component("comp1").selection().create("downWall", "Box")
     sel_down.geom("geom1", 2)
-    sel_down.set("xmin", xmin)
-    sel_down.set("xmax", xmax)
-    sel_down.set("ymin", ymin - epsilony)
-    sel_down.set("ymax", ymin + epsilony)
-    sel_down.set("zmin", zmin)
-    sel_down.set("zmax", zmax)
-    sel_down.set("condition", "allvertices")
+    sel_down.set("xmin", xmin + (xmax-xmin)/2 - e)
+    sel_down.set("xmax", xmin + (xmax-xmin)/2 + e)
+    sel_down.set("ymin", ymin)
+    sel_down.set("ymax", ymin + h/2 + h*1e-2  )
+    sel_down.set("zmin", zmin + epsilonx)
+    sel_down.set("zmax", zmax - epsilonx)
+    sel_down.set("condition", "intersects")
 
     sel_up = model.java.component("comp1").selection().create("upWall", "Box")
     sel_up.geom("geom1", 2)
-    sel_up.set("xmin", xmin)
-    sel_up.set("xmax", xmax)
-    sel_up.set("ymin", ymax - epsilony)
-    sel_up.set("ymax", ymax + epsilony)
-    sel_up.set("zmin", zmin)
-    sel_up.set("zmax", zmax)
-    sel_up.set("condition", "allvertices")
+    sel_up.set("xmin", xmin + (xmax-xmin)/2 - e)
+    sel_up.set("xmax", xmin + (xmax-xmin)/2 + e)
+    sel_up.set("ymin", ymax - h/2 - h*1e-2 )
+    sel_up.set("ymax", ymax)
+    sel_up.set("zmin", zmin + epsilonx)
+    sel_up.set("zmax", zmax - epsilonx)
+    sel_up.set("condition", "intersects")
 
     union1 = model.java.component("comp1").selection().create("union1", "Union")
     union1.geom("geom1", 2)
@@ -799,14 +799,17 @@ def create_physics_stiffness(model, young_mod, poisson_ratio, density, load_val,
     fix1 = physics.create("fix1", "Fixed", 2)
     fix1.selection().named("leftWall")
 
-    bndl1 = physics.create("bndl1", "BoundaryLoad", 2)
-    bndl1.selection().named("rightWall")
+    dis1 = physics.create("disp1", "Displacement2", 2)
+    dis1.selection().named("rightWall")
+    dis1.setIndex("Direction", "prescribed", 0)
+    dis1.setIndex("U0", "disp*"+str(Lx)+"["+metric+"]", 0)
+    
+    #bndl1 = physics.create("bndl1", "BoundaryLoad", 2)
+    #bndl1.selection().named("rightWall")
     
     #bndl1.set("FperArea", ["(axial==1)*F0", "(axial==2)*F0", "(axial==3)*F0"])
-
-    
-    bndl1.set("forceType", "ForceArea")
-    bndl1.set("forceReferenceArea", ["(axial==1)*F0", "(axial==2)*F0", "(axial==3)*F0"])
+    #bndl1.set("forceType", "ForceArea")
+    #bndl1.set("forceReferenceArea", ["(axial==1)*F0", "(axial==2)*F0", "(axial==3)*F0"])
 
     #per1 = physics.create("per1", "PeriodicCondition", 2)
     #per1.selection().named("union1")
@@ -841,9 +844,9 @@ def create_physics_stiffness(model, young_mod, poisson_ratio, density, load_val,
 
     # Variaveis Kxx, Kxy, Kxz, poisson
     var = model.java.component("comp1").variable().create("var1")
-    var.set("Kxx", "abs(intop1(solid.RFx)/aveop1(u))")
-    var.set("Kxy", "abs(intop1(solid.RFy)/aveop1(v))")
-    var.set("Kxz", "abs(intop1(solid.RFz)/aveop1(w))")
+    #var.set("Kxx", "abs(intop1(solid.RFx)/aveop1(u))")
+    #var.set("Kxy", "abs(intop1(solid.RFy)/aveop1(v))")
+    #var.set("Kxz", "abs(intop1(solid.RFz)/aveop1(w))")
     var.set("ep_x", "aveop1(u)-aveop2(u)")
     var.set("ep_y", "aveop3(v)-aveop4(v)")
     var.set("poisson", "-ep_y/ep_x")
@@ -856,8 +859,150 @@ def create_physics_stiffness(model, young_mod, poisson_ratio, density, load_val,
         model.save(file_path)
     return model
 
+def create_physics_stiffness_y(model, e, h, metric, young_mod, poisson_ratio, density, load_val, file_path):
+    """
+    Cria a física para extração de dados de rigidez (Kxx, Kxy, Kxz).
+    Define seleções, condições de contorno, material, operadores de
+    acoplamento e variáveis. Usa deslocamentos prescritos com varredura
+    paramétrica (axial: 1, 2, 3).
+    """
+    geom1 = model.java.component("comp1").geom("geom1")
+    xmin, xmax, ymin, ymax, zmin, zmax = geom1.getBoundingBox()
+    Lx = xmax - xmin
+    Ly = ymax - ymin
+    epsilonx = 1e-5 * Lx
+    epsilony = 1e-5 * Ly
 
-def _create_study(model, NonLinear=False):
+    #model.java.param().set("axial", "1")
+    #model.java.param().set("F0", f"{load_val}N/umˆ2]")
+    model.java.param().set("disp", "1")
+
+    # Selecoes
+    sel_left = model.java.component("comp1").selection().create("leftWall", "Box")
+    sel_left.geom("geom1", 2)
+    sel_left.set("xmin", xmin - epsilonx)
+    sel_left.set("xmax", xmin + epsilonx)
+    sel_left.set("ymin", ymin)
+    sel_left.set("ymax", ymax)
+    sel_left.set("zmin", zmin + epsilonx)
+    sel_left.set("zmax", zmax - epsilonx)
+    sel_left.set("condition", "intersects")
+
+    sel_right = model.java.component("comp1").selection().create("rightWall", "Box")
+    sel_right.geom("geom1", 2)
+    sel_right.set("xmin", xmax - epsilonx)
+    sel_right.set("xmax", xmax + epsilonx)
+    sel_right.set("ymin", ymin)
+    sel_right.set("ymax", ymax)
+    sel_right.set("zmin", zmin + epsilonx)
+    sel_right.set("zmax", zmax - epsilonx)
+    sel_right.set("condition", "intersects")
+
+    sel_down = model.java.component("comp1").selection().create("downWall", "Box")
+    sel_down.geom("geom1", 2)
+    sel_down.set("xmin", xmin)
+    sel_down.set("xmax", xmax)
+    sel_down.set("ymin", ymin - epsilony)
+    sel_down.set("ymax", ymin + epsilony)
+    sel_down.set("zmin", zmin)
+    sel_down.set("zmax", zmax)
+    sel_down.set("condition", "allvertices")
+
+    sel_up = model.java.component("comp1").selection().create("upWall", "Box")
+    sel_up.geom("geom1", 2)
+    sel_up.set("xmin", xmin)
+    sel_up.set("xmax", xmax)
+    sel_up.set("ymin", ymax - epsilony)
+    sel_up.set("ymax", ymax + epsilony)
+    sel_up.set("zmin", zmin)
+    sel_up.set("zmax", zmax)
+    sel_up.set("condition", "allvertices")
+
+    union1 = model.java.component("comp1").selection().create("union1", "Union")
+    union1.geom("geom1", 2)
+    union1.set("input", ["downWall", "upWall"])
+
+    
+    # Fisica
+    physics = model.java.component("comp1").physics().create("solid", "SolidMechanics", "geom1")
+
+    fix1 = physics.create("fix1", "Fixed", 2)
+    fix1.selection().named("downWall")
+
+    dis1 = physics.create("disp1", "Displacement2", 2)
+    dis1.selection().named("upWall")
+    dis1.setIndex("Direction", "prescribed", 1)
+    dis1.setIndex("U0", "disp*"+str(Ly)+"["+metric+"]", 1)
+    
+    #bndl1 = physics.create("bndl1", "BoundaryLoad", 2)
+    #bndl1.selection().named("upWall")
+    
+    #bndl1.set("FperArea", ["(axial==1)*F0", "(axial==2)*F0", "(axial==3)*F0"])
+    #bndl1.set("forceType", "ForceArea")
+    #bndl1.set("forceReferenceArea", ["0", "F0", "0"])
+
+    #per1 = physics.create("per1", "PeriodicCondition", 2)
+    #per1.selection().named("union1")
+    # Material
+    mat = model.java.component("comp1").material().create("mat1", "Common")
+    mat.propertyGroup("def").set("youngsmodulus", str(young_mod))
+    mat.propertyGroup("def").set("poissonsratio", str(poisson_ratio))
+    mat.propertyGroup("def").set("density", str(density))
+
+    # Operador de integracao na parede fixa
+    intop1 = model.java.component("comp1").cpl().create("intop1", "Integration")
+    intop1.set("method", "summation")
+    intop1.selection().geom("geom1", 2)
+    intop1.selection().named("leftWall")
+    
+    # Operadores de media nas paredes
+    aveop1 = model.java.component("comp1").cpl().create("aveop1", "Average")
+    aveop1.selection().geom("geom1", 2)
+    aveop1.selection().named("rightWall")
+
+    aveop2 = model.java.component("comp1").cpl().create("aveop2", "Average")
+    aveop2.selection().geom("geom1", 2)
+    aveop2.selection().named("leftWall")
+
+    aveop3 = model.java.component("comp1").cpl().create("aveop3", "Average")
+    aveop3.selection().geom("geom1", 2)
+    aveop3.selection().named("upWall")
+
+    aveop4 = model.java.component("comp1").cpl().create("aveop4", "Average")
+    aveop4.selection().geom("geom1", 2)
+    aveop4.selection().named("downWall")
+
+    # Variaveis Kxx, Kxy, Kxz, poisson
+    var = model.java.component("comp1").variable().create("var1")
+    #var.set("Kxx", "abs(intop1(solid.RFx)/aveop1(u))")
+    #var.set("Kxy", "abs(intop1(solid.RFy)/aveop1(v))")
+    #var.set("Kxz", "abs(intop1(solid.RFz)/aveop1(w))")
+    var.set("ep_x", "aveop1(u)-aveop2(u)")
+    var.set("ep_y", "aveop3(v)-aveop4(v)")
+    var.set("poisson", "-ep_x/ep_y")
+
+
+    model.java.component("comp1").mesh().create("mesh1")
+    model.java.component("comp1").mesh("mesh1").contribute("geom/detail", True)
+    model.java.component("comp1").mesh("mesh1").run()
+    if file_path!=None:
+        model.save(file_path)
+    return model
+
+
+def _create_study_force(model, NonLinear=False):
+    """
+    Cria o estudo Stationary + varredura paramétrica (axial 1..3).
+    NÃO cria o sol1 (cada função de solver é responsável por isso).
+    """
+    study = model.java.study().create("std1")
+    stat = study.create("stat", "Stationary")
+    stat.set("geometricNonlinearity", NonLinear)
+    study.createAutoSequences("all")
+    
+    return study
+
+def _create_study_disp(model, NonLinear=False):
     """
     Cria o estudo Stationary + varredura paramétrica (axial 1..3).
     NÃO cria o sol1 (cada função de solver é responsável por isso).
@@ -868,10 +1013,10 @@ def _create_study(model, NonLinear=False):
 
     param = study.create("param", "Parametric")
     param.set("sweeptype", "sparse")
-    param.setIndex("pname", "axial", 0)
-    param.setIndex("plistarr", "range(1,1,3)", 0)
+    param.setIndex("pname", "disp", 0)
+    param.setIndex("plistarr", "[0.01,0.02,0.05,0.1]", 0)
     study.createAutoSequences("all")
-    
+
     return study
 
 
@@ -898,7 +1043,7 @@ def create_solver_direct(model, NonLinear=False, maxiter=100, file_path=None):
     
     return model
 
-def create_solver_iterative(model, NonLinear=False, maxiter=100, file_path=None):
+def create_solver_iterative(model, BC, NonLinear=False, maxiter=100, file_path=None):
     """
     Cria um solver Stationary com solver linear ITERATIVO.
     Equivalente ao Java fornecido:
@@ -910,7 +1055,10 @@ def create_solver_iterative(model, NonLinear=False, maxiter=100, file_path=None)
         model.sol("sol1").feature("s1").create("i1", "Iterative");
         model.sol("sol1").feature("s1").feature("fcDef").set("linsolver", "i1");
     """
-    _create_study(model, NonLinear=NonLinear)
+    if BC == "force":
+        _create_study_force(model, NonLinear=NonLinear)
+    if BC == "disp":
+        _create_study_disp(model, NonLinear=NonLinear)
 
     s1 = model.java.sol("sol1").feature("s1")
     s1.feature("fc1").set("linsolver", "i1")
