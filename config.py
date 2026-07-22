@@ -34,7 +34,9 @@ MATERIAL = {
 SIMULATION = {
     "force": "TotalForce",#("ForceArea", "ForceDefArea", "TotalForce", "FollowerPressure", "Resultant")
     "force_value": [500,0,0],
-    "maxiter": 100
+    "maxiter": 100,
+    "disp":0.1,
+    "axis":"x",
 }
 
 # ================================
