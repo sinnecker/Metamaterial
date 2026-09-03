@@ -9,18 +9,12 @@ import ezdxf
 
 
 def auxetic_cell(h=1.0, l=1.0, theta_deg=30, plot=False):
-    """
-    Gera os vértices de uma célula unitária auxética re-entrante.
-    
-    Args:
-        h       : altura da célula unitária
-        l       : comprimento da haste lateral
-        theta_deg: ângulo de inclinação da haste (graus)
-        plot    : se True, exibe o plot da célula
-    
-    Returns:
-        Lista de tuplas (x, y) com os vértices do polígono (fechado).
-    """
+    '''
+    Gera os vértices de uma célula unitária auxética re-entrante
+    h: altura da célula unitária
+    l: comprimento da haste lateral
+    theta_deg: ângulo de inclinação da haste (graus)
+    '''
     theta = np.radians(theta_deg)
 
     dx = l * np.sin(theta)  # deslocamento horizontal da haste
@@ -45,35 +39,17 @@ def auxetic_cell(h=1.0, l=1.0, theta_deg=30, plot=False):
         plt.axhline(0, color='black', linewidth=0.5, linestyle='--')
         plt.axvline(0, color='black', linewidth=0.5, linestyle='--')
         plt.grid(True, linestyle=':', alpha=0.6)
-        plt.title(f"Célula Auxética (h={h}, l={l}, θ={theta_deg}°)")
+        plt.title(f'Célula Auxética (h={h}, l={l}, θ={theta_deg}°)')
         plt.show()
 
     return points
 
 
-def grid_gen(e, h, l, theta):
-    """
-    Gera os polígonos da célula unitária repetível (com células de borda)
-    para construção do padrão auxético em DXF.
-
-    A função retorna 3 grupos de polígonos:
-      - poly1: célula principal (j=0), centrada na origem
-      - poly2: células intercaladas à direita (meias células nas bordas superior/inferior)
-      - poly3: células intercaladas à esquerda (meias células nas bordas superior/inferior)
-    
-    Juntos, esses 3 grupos formam a unidade de repetição que, quando
-    replicada com passos (dH, dV), gera a malha auxética completa.
-
-    Args:
-        e    : espessura da parede
-        h    : altura da célula
-        l    : comprimento da haste lateral
-        theta: ângulo da haste em graus
-
-    Returns:
-        all_polygons1, all_polygons2, all_polygons3 : listas de polígonos
-        bbox : polígono do contorno (bounding box da unidade de repetição)
-    """
+def grid_gen(h, l, theta, e):
+    '''
+    Gera os polígonos da célula unitária repetível (com células de borda) para construção do padrão auxético em DXF
+    e: espessura da célula
+    '''
     theta_rad = np.radians(theta)
     alpha = np.pi / 2 - theta_rad  # ângulo complementar
 
@@ -108,9 +84,6 @@ def grid_gen(e, h, l, theta):
         # Deslocamento vertical da meia célula intercalada nesta iteração
         base_y_shift = z - h + dy - de
 
-        # -------------------------------------------------------
-        # Coleta todos os vértices de cada polígono no loop interno
-        # -------------------------------------------------------
         if theta_rad>np.pi/2:
             for k,(x, y) in enumerate(unit_cell):
                 if valid_row:
@@ -133,29 +106,16 @@ def grid_gen(e, h, l, theta):
                 new_poly3.append((x - dx_shift, y+ base_y_shift))
                 new_poly2.append((x + dx_shift, y+ base_y_shift))
             
-
-
-        # -------------------------------------------------------
-        # BUG CORRIGIDO: appends FORA do loop interno.
-        # Antes, os polígonos eram appendados a cada vértice,
-        # gerando 7 referências duplicadas ao mesmo objeto lista.
-        # -------------------------------------------------------
         if new_poly1:
             all_polygons1.append(new_poly1)
 
         all_polygons2.append(new_poly2)
         all_polygons3.append(new_poly3)
 
-    # ------------------------------------------------------------------
     # Bounding box da unidade de repetição (dH x dV)
-    # Baseado nos extremos da célula principal e das meias células
-    # ------------------------------------------------------------------
-    # x: usa os extremos da célula principal (poly1)
-    xmin = min(pt[0] for pt in all_polygons1[0])   # x mínimo = 0
-    xmax = max(pt[0] for pt in all_polygons1[0])   # x máximo = 2*dx
 
-    # y: usa os extremos das meias células (poly3), com offset de h/2
-    # para que a bbox seja simétrica e represente a unidade de repetição
+    xmin = min(pt[0] for pt in all_polygons1[0])   
+    xmax = max(pt[0] for pt in all_polygons1[0]) 
     ymin = all_polygons3[0][1][1] - h / 2
     ymax = all_polygons3[1][4][1] + h / 2
 
@@ -170,22 +130,18 @@ def grid_gen(e, h, l, theta):
 
     return all_polygons1, all_polygons2, all_polygons3, bbox
 
+def add_polygon(poly, doc):
+    msp = doc.modelspace()
+    exterior = list(poly.exterior.coords)
+    msp.add_lwpolyline(exterior, close=True, dxfattribs={'layer': 'EXTERIOR'})
 
-def export_void_to_dxf(polygons, cell_polygon, filename="void_mesh.dxf"):
-    """
-    Exporta o negativo (vazios = material sólido) da malha auxética para DXF.
+    for hole in poly.interiors:
+        msp.add_lwpolyline(list(hole.coords), close=True, dxfattribs={'layer': 'HOLES'})
 
-    As células (polígonos) são subtraídas do bounding box, gerando
-    a geometria real do metamaterial (paredes sólidas com furos hexagonais).
-
-    Args:
-        polygons     : lista de polígonos que representam os "buracos" (células)
-        cell_polygon : polígono do bounding box (unidade de repetição)
-        filename     : caminho de saída do arquivo DXF
-    
-    Returns:
-        void: objeto Shapely com a geometria resultante
-    """
+def export_void_to_dxf(polygons, cell_polygon, filename='void_mesh.dxf'):
+    '''
+    Exporta o negativo (vazios = material sólido) da malha auxética para DXF
+    '''
     # Cria objetos Shapely e filtra geometrias inválidas
     poly_objs = []
     for p in polygons:
@@ -209,58 +165,39 @@ def export_void_to_dxf(polygons, cell_polygon, filename="void_mesh.dxf"):
 
     # Cria o arquivo DXF
     doc = ezdxf.new()
-    msp = doc.modelspace()
 
-    def add_polygon(poly):
-        """Adiciona um polígono (exterior + furos internos) ao DXF."""
-        exterior = list(poly.exterior.coords)
-        msp.add_lwpolyline(exterior, close=True, dxfattribs={"layer": "EXTERIOR"})
-
-        for hole in poly.interiors:
-            msp.add_lwpolyline(list(hole.coords), close=True, dxfattribs={"layer": "HOLES"})
-
-    if void.geom_type == "Polygon":
-        add_polygon(void)
-    elif void.geom_type == "MultiPolygon":
+    if void.geom_type == 'Polygon':
+        add_polygon(void, doc)
+    elif void.geom_type == 'MultiPolygon':
         for p in void.geoms:
-            add_polygon(p)
+            add_polygon(p, doc)
 
     doc.saveas(filename)
     return void
 
 
-def generate_dxf(e, h, l, theta, filename="unit_cell.dxf"):
-    """
-    Função principal: gera a geometria DXF da célula unitária auxética.
+def generate_dxf(h, l, theta, e, filename='unit_cell.dxf'):
+    '''
+    Função principal: gera a geometria DXF da célula unitária auxética
+    '''
+    poly1, poly2, poly3, bbox = grid_gen(h, l, theta, e)
 
-    Args:
-        e       : espessura da parede
-        h       : altura da célula
-        l       : comprimento da haste lateral
-        theta   : ângulo da haste em graus
-        filename: caminho de saída do arquivo DXF
-
-    Returns:
-        Dicionário com void (objeto Shapely), bbox, e os grupos de polígonos.
-    """
-    poly1, poly2, poly3, bbox = grid_gen(e, h, l, theta)
-
-    # Junta TODOS os polígonos (esses são os "buracos" hexagonais)
+    # Junta TODOS os polígonos (esses são os 'buracos' hexagonais)
     all_polygons = poly1 + poly2 + poly3
 
     # Exporta via subtração booleana
     void = export_void_to_dxf(all_polygons, bbox, filename)
 
     return {
-        "void": void,
-        "bbox": bbox,
-        "poly1": poly1,
-        "poly2": poly2,
-        "poly3": poly3,
+        'void': void,
+        'bbox': bbox,
+        'poly1': poly1,
+        'poly2': poly2,
+        'poly3': poly3,
     }
 
 
-def preview_geometry(e, h, l, theta, save_path=None):
+def preview_geometry(h, l, theta, e, save_path=None):
     """
     Preview da geometria gerada (útil para depuração antes de rodar COMSOL).
     
@@ -268,7 +205,7 @@ def preview_geometry(e, h, l, theta, save_path=None):
         e, h, l, theta: parâmetros da célula
         save_path      : se fornecido, salva o plot em PNG
     """
-    result = generate_dxf(e, h, l, theta, filename="/tmp/_preview_cell.dxf")
+    result = generate_dxf(h, l, theta, e, filename="/tmp/_preview_cell.dxf")
     void = result["void"]
 
     fig, axes = plt.subplots(1, 2, figsize=(14, 6))
@@ -280,7 +217,7 @@ def preview_geometry(e, h, l, theta, save_path=None):
     ax1.set_aspect("equal")
     ax1.grid(True, linestyle=":", alpha=0.5)
 
-    poly1, poly2, poly3, bbox = grid_gen(e, h, l, theta)
+    poly1, poly2, poly3, bbox = grid_gen(h, l, theta, e)
 
     colors = ["#4C72B0", "#DD8452", "#55A868"]
     labels = ["Célula principal (poly1)", "Meia célula direita (poly2)", "Meia célula esquerda (poly3)"]
@@ -293,7 +230,7 @@ def preview_geometry(e, h, l, theta, save_path=None):
 
     # Bounding box
     bx, by = zip(*bbox + [bbox[0]])
-    ax1.plot(bx, by, 'k--', linewidth=1.5, label="Bounding Box")
+    ax1.plot(bx, by, "k--", linewidth=1.5, label="Bounding Box")
     ax1.legend(fontsize=8, loc="upper right")
 
     # --- Painel direito: geometria final (material sólido) ---
@@ -324,26 +261,3 @@ def preview_geometry(e, h, l, theta, save_path=None):
         print(f"Preview salvo em: {save_path}")
 
     plt.show()
-
-
-# ---------------------------------------------------------------------------
-# Execução direta para testar/depurar sem rodar o COMSOL
-# ---------------------------------------------------------------------------
-if __name__ == "__main__":
-
-    os.makedirs("outputs/dxf", exist_ok=True)
-    os.makedirs("outputs/plots", exist_ok=True)
-
-    from config import GEOMETRY, SCALE
-
-    scale = SCALE["scale"]
-    h = GEOMETRY["h"] * scale
-    l = GEOMETRY["l"] * scale
-    theta = GEOMETRY["theta"]
-    e = GEOMETRY["e"] * scale
-
-    print(f"Gerando geometria: h={h}, l={l}, θ={theta}°, e={e}")
-    preview_geometry(
-        e=e, h=h, l=l, theta=theta,
-        save_path="outputs/plots/geometry_preview.png"
-    )
